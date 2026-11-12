@@ -30,6 +30,9 @@ pub struct Keyboard {
     pub bus: String,
     /// Modèle reconnu, avec des touches spéciales (ex. « g710 »), vide sinon.
     pub model: String,
+    /// true si c'est en fait une souris qui se présente aussi comme un clavier
+    /// (pour ses boutons spéciaux). L'interface la met de côté.
+    pub mouse: bool,
 }
 
 /// Une touche appuyée ou relâchée.

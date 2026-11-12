@@ -142,6 +142,7 @@
         const kb = { layout: layouts[v.layout] ? v.layout : 'full-ansi', keys: {} };
         if (['M1', 'M2', 'M3'].includes(v.bank)) kb.bank = v.bank;
         if (v.separateG === true) kb.separateG = true;
+        if (v.useAnyway === true) kb.useAnyway = true;
         if (v.keys && typeof v.keys === 'object') {
           Object.entries(v.keys).forEach(([kid, e]) => {
             if (!e || !Array.isArray(e.actions)) return;
@@ -225,6 +226,9 @@
 
   const byId = (id) => st.keyboards.find((k) => k.id === id);
   const isReal = (kb) => kb && !kb.virtual && kb.id !== 'simule';
+  // Souris qui se présente aussi comme un clavier : mise de côté, sauf si on choisit de l'utiliser.
+  const isHiddenMouse = (kb) => !!kb && !!kb.mouse && !(cfg.keyboards[cfgKey(kb)] && cfg.keyboards[cfgKey(kb)].useAnyway);
+  const isShown = (kb) => isReal(kb) && !isHiddenMouse(kb);
 
   /** Identifiant gardé dans la config : VID:PID (stable d'un port USB à l'autre). */
   function cfgKey(kb) {
@@ -284,14 +288,17 @@
     if (i === -1) { cfg.order.push(k); i = cfg.order.length - 1; }
     return i;
   }
-  const macroKeyboards = () => st.keyboards.filter((k) => isReal(k) && !isPrincipal(k));
+  const macroKeyboards = () => st.keyboards.filter((k) => isShown(k) && !isPrincipal(k));
+  // Le clavier principal est toujours « Clavier 1 »; les autres suivent (2, 3…).
+  const firstMacroNumber = () => (cfg.principal ? 2 : 1);
   function titleOf(kb) {
     if (!kb) return 'Clavier';
     if (kb.id === 'simule') return 'Simulé';
     if (kb.virtual) return 'Virtuel';
-    if (isPrincipal(kb)) return 'Principal';
+    if (isHiddenMouse(kb)) return 'Souris';
+    if (isPrincipal(kb)) return 'Clavier 1';
     const i = macroKeyboards().findIndex((k) => k.id === kb.id);
-    return 'Clavier ' + (i + 1);
+    return 'Clavier ' + (i + firstMacroNumber());
   }
 
   function setKeyboards(list) {
@@ -307,8 +314,8 @@
       if (kbConf(k).separateG) separateG(k, true);
       syncLeds(k);
     });
-    if (!st.selected || (st.selected !== 'empty' && !byId(st.selected))) {
-      const first = macroKeyboards()[0] || st.keyboards.find((k) => isPrincipal(k));
+    if (!st.selected || (st.selected !== 'empty' && (!byId(st.selected) || isHiddenMouse(byId(st.selected))))) {
+      const first = macroKeyboards()[0] || st.keyboards.find((k) => isShown(k) && isPrincipal(k));
       st.selected = first ? first.id : 'empty';
     }
     renderAll();
@@ -326,7 +333,7 @@
   function renderTabs() {
     const nav = $('tabs');
     nav.textContent = '';
-    const principal = st.keyboards.find((k) => isReal(k) && isPrincipal(k));
+    const principal = st.keyboards.find((k) => isShown(k) && isPrincipal(k));
     const list = (principal ? [principal] : []).concat(macroKeyboards());
     list.forEach((kb) => {
       const b = document.createElement('button');
@@ -337,7 +344,7 @@
       b.dataset.id = kb.id;
       b.style.setProperty('--c', COLORS[colorIndex(kb) % COLORS.length]);
       const lock = isPrincipal(kb) ? (cfg.principalMacros ? svg('unlock', 14) : svg('lock', 14)) : '<span class="dot"></span>';
-      b.innerHTML = lock + '<span>' + esc(titleOf(kb)) + '</span><span class="chip">· ' + esc(kb.vendor || kb.name) + '</span>';
+      b.innerHTML = lock + '<span>' + esc(titleOf(kb)) + '</span><span class="chip">· ' + esc(isPrincipal(kb) ? 'principal' : (kb.vendor || kb.name)) + '</span>';
       b.addEventListener('click', () => select(kb.id));
       nav.append(b);
     });
@@ -346,7 +353,7 @@
     empty.className = 'tab empty-tab';
     empty.setAttribute('role', 'tab');
     empty.setAttribute('aria-selected', String(st.selected === 'empty'));
-    empty.innerHTML = '<span class="dot"></span><span>Clavier ' + (macroKeyboards().length + 1) + '</span><span class="chip">· vide</span>';
+    empty.innerHTML = '<span class="dot"></span><span>Clavier ' + (macroKeyboards().length + firstMacroNumber()) + '</span><span class="chip">· vide</span>';
     empty.addEventListener('click', () => select('empty'));
     nav.append(empty);
   }
@@ -364,7 +371,7 @@
   const board = { layout: null, kbId: null, def: null, els: [] };
 
   function renderCard(kb) {
-    $('kb-eyebrow').textContent = titleOf(kb);
+    $('kb-eyebrow').textContent = titleOf(kb) + (isPrincipal(kb) ? ' · principal' : '');
     $('kb-name').textContent = kb.name;
     const bits = [];
     if (kb.vendor && !kb.name.includes(kb.vendor)) bits.push(kb.vendor);
@@ -382,7 +389,8 @@
         + '<button type="button" class="switch" role="switch" aria-checked="' + cfg.principalMacros + '" aria-label="Permettre des macros sur le clavier principal" data-act="toggle-principal"><span></span></button>Macros permises</span>'
         + '<button type="button" class="btn btn-ghost btn-sm" data-act="unset-principal">Ce n’est pas mon clavier principal</button>';
     } else {
-      role.innerHTML = '<button type="button" class="btn btn-sm" data-act="set-principal">' + svg('lock', 14) + 'C’est mon clavier principal</button>';
+      role.innerHTML = (kb.mouse ? '<button type="button" class="btn btn-ghost btn-sm" data-act="hide-mouse" title="Cet appareil est en fait une souris : le remettre de côté.">Remettre de côté (souris)</button>' : '')
+        + '<button type="button" class="btn btn-sm" data-act="set-principal">' + svg('lock', 14) + 'C’est mon clavier principal</button>';
     }
 
     const bankEl = $('bank');
@@ -413,7 +421,7 @@
     } else if (hasBanks(kb)) {
       note.innerHTML = '<span>' + esc('G710+ : touches G séparées des chiffres. M1, M2 et M3 changent de banque (le voyant suit).') + '</span>'
         + '<button type="button" class="btn btn-sm" data-act="g710-unseparate" title="Les touches G retaperont 1 à 6 après avoir débranché et rebranché le clavier.">Ne plus séparer</button>';
-    } else if (!cfg.principal && st.keyboards.filter(isReal).length > 1) {
+    } else if (!cfg.principal && st.keyboards.filter(isShown).length > 1) {
       note.classList.add('warn');
       note.textContent = 'Première chose à faire : va dans l’onglet de ton clavier de tous les jours et clique « C’est mon clavier principal ».';
     } else {
@@ -541,6 +549,7 @@
     if (b.dataset.act === 'set-principal') { cfg.principal = cfgKey(kb); cfg.principalMacros = false; }
     if (b.dataset.act === 'unset-principal') { cfg.principal = null; cfg.principalMacros = false; }
     if (b.dataset.act === 'toggle-principal') cfg.principalMacros = !cfg.principalMacros;
+    if (b.dataset.act === 'hide-mouse') { delete kbConf(kb).useAnyway; st.selected = null; changed(); setKeyboards(st.keyboards.filter((k) => k.id !== 'simule')); return; }
     changed();
     renderAll();
   });
@@ -713,12 +722,30 @@
     const empty = st.selected === 'empty';
     $('kb-view').hidden = empty;
     $('empty-view').hidden = !empty;
-    if (empty) { $('detect-msg').textContent = ''; return; }
+    if (empty) { $('detect-msg').textContent = ''; renderSetAside(); return; }
     const kb = byId(st.selected);
     if (!kb) return;
     renderCard(kb);
     renderSteps();
   }
+
+  // Appareils mis de côté (souris qui se présentent aussi comme des claviers)
+  function renderSetAside() {
+    const box = $('set-aside');
+    const mice = st.keyboards.filter((k) => isReal(k) && isHiddenMouse(k));
+    if (!mice.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="eyebrow">Mis de côté</div>' + mice.map((k) => '<div class="aside-row">'
+      + '<span class="grow"><strong>' + esc(k.name) + '</strong><small>Partie « clavier » d’une souris' + (k.vid ? ' · ' + esc(k.vid + ':' + k.pid) : '') + '</small></span>'
+      + '<button type="button" class="btn btn-sm" data-use="' + esc(k.id) + '">L’utiliser comme clavier</button></div>').join('');
+  }
+  $('set-aside').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-use]');
+    const kb = b && byId(b.dataset.use);
+    if (!kb) return;
+    kbConf(kb).useAnyway = true;
+    changed();
+    select(kb.id);
+  });
 
   $('detect').addEventListener('click', async () => {
     const msg = $('detect-msg');
@@ -785,7 +812,7 @@
     if (ev.down && !repeat) {
       pulseTab(ev.device);
       // Suivre le clavier utilisé (jamais vers le clavier principal : il sert à écrire).
-      if (!busy && st.follow && isReal(kb) && !isPrincipal(kb) && ev.device !== st.selected) select(ev.device);
+      if (!busy && st.follow && isShown(kb) && !isPrincipal(kb) && ev.device !== st.selected) select(ev.device);
       if (hasBanks(kb) && isGKey(kid)) st.lastG[kb.id] = Date.now();
       // G710 : M1, M2, M3 changent de banque (même pendant qu'on écrit).
       if (hasBanks(kb) && BANKS.includes(kid)) {

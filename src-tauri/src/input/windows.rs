@@ -44,7 +44,7 @@ use windows_sys::Win32::UI::Input::{
     GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, RegisterRawInputDevices,
     HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RID_DEVICE_INFO,
     RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDEV_PAGEONLY, RIDI_DEVICEINFO, RIDI_DEVICENAME, RIDI_PREPARSEDDATA,
-    RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD,
+    RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD, RIM_TYPEMOUSE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
@@ -611,6 +611,16 @@ pub fn list() -> Vec<Keyboard> {
         let mut keyboards: Vec<Keyboard> = Vec::new();
         let mut map: HashMap<usize, String> = HashMap::new();
 
+        // Appareils qui ont aussi une partie « souris » (même appareil USB / Bluetooth).
+        let mut pointers: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for item in items.iter().filter(|d| d.dwType == RIM_TYPEMOUSE) {
+            let Some(path) = device_path(item.hDevice) else { continue };
+            let (v, p) = parse_ids(&path);
+            if !v.is_empty() {
+                pointers.insert(group_id(&path, &v, &p));
+            }
+        }
+
         for item in items.iter().filter(|d| d.dwType == RIM_TYPEKEYBOARD) {
             let Some(path) = device_path(item.hDevice) else { continue };
             let (vid, pid) = parse_ids(&path);
@@ -637,6 +647,13 @@ pub fn list() -> Vec<Keyboard> {
             }
             let vendor = vendor_name(&vid).to_string();
             let model = model_of(&vid, &pid).to_string();
+            // Une souris qui se dit aussi clavier : son nom dit « mouse » / « souris »,
+            // ou elle a une partie souris et aucun nom de produit propre.
+            let says_mouse = info.name.as_ref().map(|n| {
+                let n = n.to_lowercase();
+                n.contains("mouse") || n.contains("souris")
+            }).unwrap_or(false);
+            let mouse = !is_virtual && (says_mouse || (pointers.contains(&id) && info.name.is_none()));
             let name = info.name.clone().unwrap_or_else(|| {
                 if model == "g710" {
                     "Logitech G710+".into()
@@ -662,6 +679,7 @@ pub fn list() -> Vec<Keyboard> {
                 is_virtual,
                 bus: info.bus,
                 model,
+                mouse,
             });
         }
 

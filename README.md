@@ -18,7 +18,7 @@ La configuration est gardée dans `keyboard-bro.json`, à côté du programme (v
 
 Chaque archive Windows contient :
 - `KeyboardBro-portable-….exe` : **version portable**, rien à installer, aucun droit d'administrateur;
-- `Keyboard Bro_0.3.0_…-setup.exe` : installateur classique.
+- `Keyboard Bro_0.3.1_…-setup.exe` : installateur classique.
 
 ## Claviers avec touches spéciales
 
