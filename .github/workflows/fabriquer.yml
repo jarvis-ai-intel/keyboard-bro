@@ -1,0 +1,80 @@
+# =====================================================================
+#  Fabrique Keyboard Bro automatiquement, à chaque envoi de code sur GitHub.
+#  Résultat : onglet « Actions » du dépôt → dernière exécution → « Artifacts » (en bas).
+#   - Windows x64   : version portable (.exe seul) + installateur
+#   - Windows ARM64 : version portable (.exe seul) + installateur
+#   - Mac (puces Apple) : application en .zip (non signée : clic droit › Ouvrir la 1re fois)
+# =====================================================================
+name: Fabriquer Keyboard Bro
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  fabriquer:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - name: Windows-ARM64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bundles: nsis
+          - name: Mac-puces-Apple
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: app
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ${{ matrix.target }}
+
+      - name: Installer l'outil Tauri
+        run: npm install
+
+      - name: Compiler
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: Rassembler les fichiers (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $release = "src-tauri/target/${{ matrix.target }}/release"
+          $exe = Get-ChildItem "$release/*.exe" | Select-Object -First 1
+          Copy-Item $exe.FullName "out/KeyboardBro-portable-${{ matrix.name }}.exe"
+          Copy-Item "$release/bundle/nsis/*.exe" out/
+          Get-ChildItem out
+
+      - name: Rassembler les fichiers (Mac)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p out
+          cd "src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+          ditto -c -k --keepParent "Keyboard Bro.app" "$GITHUB_WORKSPACE/out/KeyboardBro-${{ matrix.name }}.zip"
+          ls -la "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KeyboardBro-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error

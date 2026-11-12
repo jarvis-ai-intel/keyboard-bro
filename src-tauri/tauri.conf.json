@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Keyboard Bro",
+  "version": "0.1.0",
+  "identifier": "com.jarvis.keyboardbro",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Keyboard Bro",
+        "width": 1320,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 620,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "Un 2e clavier pour tes macros",
+    "longDescription": "Keyboard Bro transforme un deuxième clavier en clavier à macros : lancer des programmes, ouvrir des liens, coller du texte, faire des combinaisons de touches.",
+    "copyright": "© 2026 Jarvis",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": { "languages": ["French", "English"], "displayLanguageSelector": false }
+    }
+  }
+}
