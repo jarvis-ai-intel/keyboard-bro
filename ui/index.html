@@ -7,103 +7,113 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app">
+<div id="app" class="app">
 
   <header class="topbar">
     <div class="brand">
-      <img src="logo.png" alt="" width="34" height="34">
+      <img src="logo.png" alt="" width="32" height="32">
       <span>Keyboard Bro</span>
     </div>
-    <nav id="tabs" class="tabs" aria-label="Claviers détectés"></nav>
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Claviers"></nav>
     <div class="top-right">
       <span id="mode-pill" class="pill"></span>
-      <button type="button" id="refresh" class="btn">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
-        Actualiser
-      </button>
+      <span id="save-pill" class="pill save"></span>
     </div>
   </header>
 
   <div id="banner" class="banner" hidden></div>
 
-  <main class="content">
-    <section class="card kb-card" aria-label="Dessin du clavier">
-      <div class="kb-head">
-        <div class="kb-title">
-          <div class="eyebrow" id="kb-eyebrow">Clavier</div>
-          <h1 id="kb-name">Recherche des claviers…</h1>
-          <div class="sub" id="kb-sub"></div>
+  <!-- Vue d'un clavier -->
+  <main id="kb-view" class="main">
+    <div class="row-top">
+      <section class="card kb-card" aria-label="Dessin du clavier">
+        <div class="kb-head">
+          <div class="kb-title">
+            <div class="eyebrow" id="kb-eyebrow">Clavier</div>
+            <h1 id="kb-name">Recherche des claviers…</h1>
+            <div class="sub" id="kb-sub"></div>
+          </div>
+          <div class="kb-actions">
+            <div id="role" class="role"></div>
+            <label class="field">Disposition
+              <select id="layout-select">
+                <optgroup label="PC / Windows">
+                  <option value="full-ansi">Complet ANSI · 104 touches</option>
+                  <option value="full-iso">Complet ISO · 105 touches (canadien français, européen)</option>
+                  <option value="media">Multimédia · 104 + 9 touches média</option>
+                  <option value="tkl-ansi">Sans pavé numérique ANSI · 87 touches</option>
+                  <option value="tkl-iso">Sans pavé numérique ISO · 88 touches</option>
+                  <option value="c75">Compact 75 % · 84 touches</option>
+                  <option value="c65">Compact 65 % · 68 touches</option>
+                  <option value="c60">Compact 60 % · 61 touches</option>
+                  <option value="pad">Pavé numérique seul · 17 touches</option>
+                </optgroup>
+                <optgroup label="Apple / Mac">
+                  <option value="mac-full">Apple avec pavé numérique · F1 à F19</option>
+                  <option value="mac-compact">Apple Magic Keyboard compact · 78 touches</option>
+                </optgroup>
+              </select>
+            </label>
+          </div>
         </div>
-        <div class="kb-actions">
-          <label class="field">Disposition
-            <select id="layout-select">
-              <optgroup label="PC / Windows">
-                <option value="full-ansi">Complet ANSI · 104 touches</option>
-                <option value="full-iso">Complet ISO · 105 touches (canadien français, européen)</option>
-                <option value="media">Multimédia · 104 + 9 touches média</option>
-                <option value="tkl-ansi">Sans pavé numérique ANSI · 87 touches</option>
-                <option value="tkl-iso">Sans pavé numérique ISO · 88 touches</option>
-                <option value="c75">Compact 75 % · 84 touches</option>
-                <option value="c65">Compact 65 % · 68 touches</option>
-                <option value="c60">Compact 60 % · 61 touches</option>
-                <option value="pad">Pavé numérique seul · 17 touches</option>
-              </optgroup>
-              <optgroup label="Apple / Mac">
-                <option value="mac-full">Apple avec pavé numérique · F1 à F19</option>
-                <option value="mac-compact">Apple Magic Keyboard compact · 78 touches</option>
-              </optgroup>
-            </select>
-          </label>
-          <button type="button" id="principal-btn" class="btn"></button>
+        <div id="kb-note" class="note" hidden></div>
+        <div id="kb-wrap" class="kb-wrap"><div id="kb-board" class="kb-board" role="img" aria-label="Dessin du clavier"></div></div>
+        <div class="legend">
+          <div class="legend-items">
+            <span><i class="sw sw-free"></i>Libre</span>
+            <span><i class="sw sw-set"></i>Assignée</span>
+            <span><i class="sw sw-edit"></i>En modification</span>
+            <span><i class="sw sw-na"></i>Invisible pour Windows</span>
+          </div>
+          <span id="layout-hint" class="hint"></span>
         </div>
-      </div>
-      <p class="hint" id="layout-hint"></p>
-      <div id="kb-note" class="note" hidden></div>
-      <div class="kb-scroll"><div id="kb-board" class="kb-board" role="img" aria-label="Dessin du clavier"></div></div>
-      <div class="legend">
-        <div class="legend-items">
-          <span><i class="sw sw-free"></i>Pas encore appuyée</span>
-          <span><i class="sw sw-seen"></i>Déjà vue</span>
-          <span><i class="sw sw-down"></i>Appuyée en ce moment</span>
-          <span><i class="sw sw-na"></i>Invisible pour Windows (fn, Touch ID)</span>
-        </div>
-        <span id="seen-count"></span>
-      </div>
-    </section>
+      </section>
 
-    <div class="row">
       <section class="card terminal" aria-label="Terminal en direct">
         <div class="term-head">
-          <span class="term-title"><i class="dot"></i>Terminal en direct</span>
+          <span class="term-title" id="term-title"><i class="dot"></i>Terminal en direct</span>
           <div class="term-tools">
-            <label class="check"><input type="checkbox" id="follow" checked> Suivre le clavier utilisé</label>
-            <label class="check"><input type="checkbox" id="show-up"> Montrer les relâchements</label>
             <button type="button" id="pause" class="btn btn-dark">Pause</button>
             <button type="button" id="clear" class="btn btn-dark">Effacer</button>
           </div>
         </div>
         <div id="log" class="log" aria-live="off"></div>
-      </section>
-
-      <section class="card devices" aria-label="Claviers détectés">
-        <h2>Claviers détectés</h2>
-        <ul id="device-list" class="device-list"></ul>
-        <div class="info">
-          <strong>Version 0.1 · lecture seulement.</strong>
-          Keyboard Bro regarde quelles touches viennent de quel clavier. Rien n'est bloqué, rien n'est enregistré, rien n'est envoyé sur Internet. Les macros arrivent à l'étape 2.
+        <div class="term-foot">
+          <label class="check"><input type="checkbox" id="follow" checked> Suivre le clavier utilisé</label>
+          <label class="check"><input type="checkbox" id="show-up"> Relâchements</label>
         </div>
       </section>
+    </div>
+
+    <div id="steps" class="row-steps"></div>
+  </main>
+
+  <!-- Onglet « Clavier vide » -->
+  <main id="empty-view" class="main empty-view" hidden>
+    <div class="empty-box">
+      <div class="empty-art" aria-hidden="true">
+        <svg width="150" height="60" viewBox="0 0 150 60" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="1" y="1" width="148" height="58" rx="8"></rect><path d="M14 16h10M30 16h10M46 16h10M62 16h10M78 16h10M94 16h10M110 16h10M126 16h10M18 30h10M34 30h10M50 30h10M66 30h10M82 30h10M98 30h10M114 30h18M40 44h70"></path></svg>
+      </div>
+      <h1>Aucun autre clavier détecté pour le moment</h1>
+      <p>Branche un deuxième clavier (USB ou Bluetooth) : il apparaîtra tout seul dans un nouvel onglet. Tu peux aussi appuyer sur une de ses touches pour aller directement à son onglet.</p>
+      <button type="button" id="detect" class="btn btn-primary btn-lg">Détecter un clavier</button>
+      <p id="detect-msg" class="muted"></p>
+      <p class="muted small">Ton clavier principal n’apparaîtra jamais ici.</p>
     </div>
   </main>
 
   <footer class="footer">
     <span id="footer-left">Keyboard Bro</span>
-    <span>Code ouvert · fonctionne sans Internet</span>
+    <span id="footer-right" class="mono"></span>
   </footer>
 </div>
 
+<div id="modal-root"></div>
+<div id="toast" class="toast" role="status" hidden></div>
+
 <script src="layouts.js"></script>
 <script src="keymap.js"></script>
+<script src="shortcuts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

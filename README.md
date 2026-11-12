@@ -2,7 +2,7 @@
 
 Transforme un deuxième clavier en clavier à macros : une touche peut lancer un programme, ouvrir un lien, coller du texte ou faire une combinaison de touches — pendant que ton clavier principal reste normal.
 
-> **Version 0.1 (étape 1) — lecture seulement.** Keyboard Bro reconnaît chaque clavier branché et montre en direct quelles touches viennent de quel clavier. Rien n'est bloqué, rien n'est enregistré, rien n'est envoyé sur Internet. Les macros arrivent à l'étape 2.
+> **Version 0.2 — configuration.** Keyboard Bro reconnaît chaque clavier branché, montre en direct quelles touches viennent de quel clavier, et permet de programmer les touches (étapes 1-2-3) : ouvrir un programme, une URL, coller du texte, faire une combinaison de touches, attendre. La configuration est sauvegardée automatiquement dans `keyboard-bro.json`. **Les touches ne déclenchent pas encore leurs actions** et rien n'est bloqué : ça arrive à la prochaine version. Rien n'est envoyé sur Internet.
 
 ## Télécharger
 
@@ -14,9 +14,11 @@ Onglet **Actions** du dépôt → dernière exécution réussie (✓ verte) → 
 | `KeyboardBro-Windows-ARM64` | PC Windows sur puce ARM (Snapdragon, Surface Pro X…) |
 | `KeyboardBro-Mac-puces-Apple` | Mac M1 à M4 (mode démonstration pour l'instant) |
 
+La configuration est gardée dans `keyboard-bro.json`, à côté du programme (version portable) ou dans le dossier de l'utilisateur si le dossier du programme n'est pas modifiable.
+
 Chaque archive Windows contient :
 - `KeyboardBro-portable-….exe` : **version portable**, rien à installer, aucun droit d'administrateur;
-- `Keyboard Bro_0.1.0_…-setup.exe` : installateur classique.
+- `Keyboard Bro_0.2.0_…-setup.exe` : installateur classique.
 
 ## Comment c'est fait
 
@@ -39,6 +41,7 @@ npx tauri build    # fabriquer la version finale
 ## Feuille de route
 
 1. ✅ Squelette : onglets par clavier, dessin du clavier, terminal en direct
-2. Actions : programme, URL, texte, combinaison, attente — sauvegarde automatique
+2. ✅ Configuration : étapes 1-2-3, fenêtres d'actions, sauvegarde automatique, export/import, clavier principal verrouillé ou non
+2b. Exécution des actions + blocage des touches du clavier à macros
 3. Profils, importation AutoHotkey, étiquettes à imprimer, désactivation des macros
 4. Connexion IA (MCP)
