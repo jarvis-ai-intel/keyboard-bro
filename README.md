@@ -2,7 +2,7 @@
 
 Transforme un deuxième clavier en clavier à macros : une touche peut lancer un programme, ouvrir un lien, coller du texte ou faire une combinaison de touches — pendant que ton clavier principal reste normal.
 
-> **Version 0.2 — configuration.** Keyboard Bro reconnaît chaque clavier branché, montre en direct quelles touches viennent de quel clavier, et permet de programmer les touches (étapes 1-2-3) : ouvrir un programme, une URL, coller du texte, faire une combinaison de touches, attendre. La configuration est sauvegardée automatiquement dans `keyboard-bro.json`. **Les touches ne déclenchent pas encore leurs actions** et rien n'est bloqué : ça arrive à la prochaine version. Rien n'est envoyé sur Internet.
+> **Version 0.3 — configuration + Logitech G710+.** Keyboard Bro reconnaît chaque clavier branché, montre en direct quelles touches viennent de quel clavier, et permet de programmer les touches (étapes 1-2-3) : ouvrir un programme, une URL, coller du texte, faire une combinaison de touches, attendre. La configuration est sauvegardée automatiquement dans `keyboard-bro.json`. **Les touches ne déclenchent pas encore leurs actions** et rien n'est bloqué : ça arrive à la prochaine version. Rien n'est envoyé sur Internet.
 
 ## Télécharger
 
@@ -18,7 +18,12 @@ La configuration est gardée dans `keyboard-bro.json`, à côté du programme (v
 
 Chaque archive Windows contient :
 - `KeyboardBro-portable-….exe` : **version portable**, rien à installer, aucun droit d'administrateur;
-- `Keyboard Bro_0.2.0_…-setup.exe` : installateur classique.
+- `Keyboard Bro_0.3.0_…-setup.exe` : installateur classique.
+
+## Claviers avec touches spéciales
+
+- **Logitech G710 / G710+** (VID 046D, PID C24D) : touches G1 à G6, banques M1/M2/M3 (les touches G ont d'autres actions dans chaque banque, le voyant suit) et MR, lues sans le logiciel de Logitech. Le bouton « Séparer les touches G » empêche G1-G6 de taper aussi 1 à 6 (même commande que le pilote Linux `hid-lg-g15`). Pour revenir comme avant : débrancher et rebrancher le clavier.
+- **Touches multimédia** (volume, lecture, piste suivante…) de tous les claviers.
 
 ## Comment c'est fait
 

@@ -6,6 +6,7 @@
 'use strict';
 const KBLayouts = {
   layoutDef(id) {
+    if (id === 'g710') return this.g710();
     const K = [];
     const add = (sec, kid, label, x, y, w, h, tip, na) => K.push({ sec: sec, id: kid, label: label, x: x, y: y, w: w || 1, h: h || 1, tip: tip || label, na: !!na });
     const run = (y, x0, labels) => labels.forEach((l, n) => add('main', l, l, x0 + n, y));
@@ -164,7 +165,30 @@ const KBLayouts = {
       'c60': 'Compact 60 % : ni rangée F, ni flèches dédiées.',
       'pad': 'Pavé numérique séparé : parfait comme petit clavier à macros.',
       'mac-full': 'Clavier Apple avec pavé : F13 à F19 ne servent à presque rien dans Windows, ce sont des touches idéales pour des macros.',
-      'mac-compact': 'Magic Keyboard d’Apple : rangée du haut demi-hauteur et flèches en T inversé.'
+      'mac-compact': 'Magic Keyboard d’Apple : rangée du haut demi-hauteur et flèches en T inversé.',
+      'g710': 'Logitech G710 / G710+ : 6 touches G à gauche, banques M1, M2, M3 (chaque banque donne d’autres actions aux touches G), touche MR et touches multimédia.'
     };
+  },
+  // Logitech G710 / G710+ : clavier complet + colonne G1-G6 à gauche + rangée M / multimédia en haut.
+  g710() {
+    const base = this.layoutDef('full-ansi');
+    const dx = 1.45, dy = 0.95;
+    const K = base.keys.map((k) => Object.assign({}, k, { x: k.x + dx, y: k.y + dy }));
+    const add = (sec, id, label, x, y, w, h, tip, na) => K.push({ sec: sec, id: id, label: label, x: x, y: y, w: w || 1, h: h || 1, tip: tip || label, na: !!na });
+    for (let n = 1; n <= 6; n++) {
+      add('g', 'G' + n, 'G' + n, 0, dy + (n - 1) * 0.9, 1.15, 0.82, 'G' + n + ' — touche programmable (ses actions changent avec la banque M1, M2, M3)');
+    }
+    const th = 0.72;
+    ['M1', 'M2', 'M3'].forEach((m, i) => add('m', m, m, dx + 2 + i, 0, 0.9, th, m + ' — banque ' + (i + 1) + ' : clique pour donner d’autres actions aux touches G'));
+    add('m', 'MR', 'MR', dx + 5.2, 0, 0.9, th, 'MR — touche d’enregistrement (programmable dans Keyboard Bro)');
+    add('m', 'GameMode', 'Jeu', dx + 6.5, 0, 1, th, 'Touche Jeu : désactive la touche Windows (gérée par le clavier lui-même)', true);
+    add('m', 'Light1', 'Lum 1', dx + 10.6, 0, 1, th, 'Rétroéclairage zone 1 — ZQSD/WASD et flèches (géré par le clavier lui-même)', true);
+    add('m', 'Light2', 'Lum 2', dx + 11.6, 0, 1, th, 'Rétroéclairage zone 2 — le reste du clavier (géré par le clavier lui-même)', true);
+    [['Stop', 'Stop', 'Arrêt'], ['Prev', 'Préc', 'Piste précédente'], ['Play', 'Lect', 'Lecture / Pause'], ['Next', 'Suiv', 'Piste suivante']]
+      .forEach((m, i) => add('media', m[0], m[1], dx + 13.3 + i, 0, 0.9, th, m[2]));
+    add('media', 'Mute', 'Muet', dx + 18.1, 0, 1, th, 'Sourdine');
+    add('media', 'VolDn', 'Vol −', dx + 19.3, 0, 1, th, 'Molette du volume (baisser)');
+    add('media', 'VolUp', 'Vol +', dx + 20.3, 0, 1, th, 'Molette du volume (monter)');
+    return { keys: K, w: base.w + dx, h: base.h + dy };
   }
 };

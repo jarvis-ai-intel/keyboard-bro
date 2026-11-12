@@ -1,8 +1,9 @@
 // =====================================================================
 //  Keyboard Bro — le cœur du programme
 //
-//  Version 0.2 :
+//  Version 0.3 :
 //  - lecture des claviers (nom, fabricant, VID/PID, touches en direct);
+//  - touches multimédia, et touches G1-G6 / M1-M3 / MR du Logitech G710+;
 //  - configuration des touches (étapes 1-2-3), sauvegardée dans keyboard-bro.json;
 //  - les touches ne déclenchent PAS encore leurs actions : rien n'est bloqué.
 //
@@ -28,6 +29,18 @@ const MIN_H: u32 = 560;
 #[tauri::command]
 fn list_keyboards() -> Vec<input::Keyboard> {
     input::list()
+}
+
+/// Logitech G710 : les touches G1-G6 cessent de taper 1 à 6 (rapport de configuration 0x09).
+#[tauri::command]
+fn g710_separate(device: String) -> Result<u32, String> {
+    input::g710_feature(&device, &[0x09])
+}
+
+/// Logitech G710 : voyants M1 (0x10), M2 (0x20), M3 (0x40), MR (0x80).
+#[tauri::command]
+fn g710_leds(device: String, mask: u8) -> Result<u32, String> {
+    input::g710_feature(&device, &[0x06, mask & 0xF0])
 }
 
 /// Informations sur l'ordinateur.
@@ -77,6 +90,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_keyboards,
             platform_info,
+            g710_separate,
+            g710_leds,
             config::load_config,
             config::save_config,
             config::backup_config,

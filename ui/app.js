@@ -67,7 +67,7 @@
 
   // ---------- Noms des touches ----------
   const KEYINFO = {};
-  ['mac-full', 'media', 'full-iso', 'full-ansi'].forEach((id) => {
+  ['g710', 'mac-full', 'media', 'full-iso', 'full-ansi'].forEach((id) => {
     KBLayouts.layoutDef(id).keys.forEach((k) => { if (k.label) KEYINFO[k.id] = { label: k.label, tip: k.tip }; });
   });
   Object.assign(KEYINFO, { Space: { label: 'Espace', tip: 'Espace' }, Enter: { label: 'Entrée', tip: 'Entrée' } });
@@ -140,6 +140,8 @@
       Object.entries(c.keyboards).forEach(([k, v]) => {
         if (!v || typeof v !== 'object') return;
         const kb = { layout: layouts[v.layout] ? v.layout : 'full-ansi', keys: {} };
+        if (['M1', 'M2', 'M3'].includes(v.bank)) kb.bank = v.bank;
+        if (v.separateG === true) kb.separateG = true;
         if (v.keys && typeof v.keys === 'object') {
           Object.entries(v.keys).forEach(([kid, e]) => {
             if (!e || !Array.isArray(e.actions)) return;
@@ -217,7 +219,8 @@
     follow: true,
     showUp: false,
     lineCount: 0,
-    dialog: false
+    dialog: false,
+    lastG: {}             // id clavier → moment de la dernière touche G (G710)
   };
 
   const byId = (id) => st.keyboards.find((k) => k.id === id);
@@ -238,7 +241,42 @@
     if (!cfg.keyboards[k]) cfg.keyboards[k] = { layout: guessLayout(kb), keys: {} };
     return cfg.keyboards[k];
   }
-  function guessLayout(kb) { return kb && kb.vid === '05AC' ? 'mac-full' : 'full-ansi'; }
+  // ---------- Logitech G710+ : banques M1-M3 et commandes ----------
+  const BANKS = ['M1', 'M2', 'M3'];
+  const hasBanks = (kb) => !!kb && kb.model === 'g710';
+  const isGKey = (kid) => /^G[1-6]$/.test(kid || '');
+  const bankOf = (kb) => { const b = kbConf(kb).bank; return BANKS.includes(b) ? b : 'M1'; };
+  /** Les touches G ont des actions différentes dans chaque banque : « M2:G1 », etc. */
+  const storeId = (kb, kid) => (hasBanks(kb) && isGKey(kid) ? bankOf(kb) + ':' + kid : kid);
+  function g710(cmd, kb, args) {
+    if (!invoke || !st.live) return Promise.reject(new Error('disponible dans le programme Windows seulement'));
+    return invoke(cmd, Object.assign({ device: kb.id }, args || {}));
+  }
+  function syncLeds(kb) {
+    if (hasBanks(kb)) g710('g710_leds', kb, { mask: 0x10 << BANKS.indexOf(bankOf(kb)) }).catch(() => {});
+  }
+  function setBank(kb, bank) {
+    const conf = kbConf(kb);
+    const was = bankOf(kb);
+    conf.bank = bank;
+    syncLeds(kb);
+    if (was === bank) return;
+    changed();
+    if (kb.id === st.selected) { renderCard(kb); renderSteps(); }
+    toast('Banque ' + bank + ' : les touches G1 à G6 ont maintenant les actions de ' + bank + '.');
+  }
+  async function separateG(kb, quiet) {
+    try {
+      await g710('g710_separate', kb);
+      if (!quiet) toast('C’est fait : les touches G1 à G6 ne tapent plus 1 à 6.');
+      return true;
+    } catch (e) {
+      if (!quiet) toast('Le G710 n’a pas accepté la commande : ' + e, true);
+      return false;
+    }
+  }
+
+  function guessLayout(kb) { return !kb ? 'full-ansi' : kb.model === 'g710' ? 'g710' : kb.vid === '05AC' ? 'mac-full' : 'full-ansi'; }
 
   function colorIndex(kb) {
     const k = cfgKey(kb);
@@ -257,12 +295,18 @@
   }
 
   function setKeyboards(list) {
+    const before = new Set(st.keyboards.map((k) => k.id));
     const sim = byId('simule');
     st.keyboards = list.slice();
     if (sim) st.keyboards.push(sim);
-    const before = cfg.order.length;
+    const known = cfg.order.length;
     st.keyboards.filter(isReal).forEach((k) => colorIndex(k));
-    if (cfg.order.length !== before) changed();
+    if (cfg.order.length !== known) changed();
+    // G710 qui vient d'arriver : refaire la séparation des touches G et rallumer le bon voyant M.
+    st.keyboards.filter((k) => hasBanks(k) && !before.has(k.id)).forEach((k) => {
+      if (kbConf(k).separateG) separateG(k, true);
+      syncLeds(k);
+    });
     if (!st.selected || (st.selected !== 'empty' && !byId(st.selected))) {
       const first = macroKeyboards()[0] || st.keyboards.find((k) => isPrincipal(k));
       st.selected = first ? first.id : 'empty';
@@ -341,6 +385,15 @@
       role.innerHTML = '<button type="button" class="btn btn-sm" data-act="set-principal">' + svg('lock', 14) + 'C’est mon clavier principal</button>';
     }
 
+    const bankEl = $('bank');
+    if (hasBanks(kb) && macrosAllowed(kb)) {
+      const cur = bankOf(kb);
+      bankEl.innerHTML = '<span title="Chaque banque donne d’autres actions aux touches G1 à G6. Les touches M1, M2, M3 du clavier changent aussi de banque.">Banque</span><div class="seg" role="group" aria-label="Banque">'
+        + BANKS.map((b) => '<button type="button" class="' + (b === cur ? 'on' : '') + '" data-bank="' + b + '" aria-pressed="' + (b === cur) + '">' + b + '</button>').join('') + '</div>';
+    } else {
+      bankEl.innerHTML = '';
+    }
+
     const conf = kbConf(kb);
     $('layout-select').value = conf.layout;
     $('layout-hint').textContent = KBLayouts.layoutInfo()[conf.layout] || '';
@@ -353,6 +406,13 @@
     } else if (isPrincipal(kb)) {
       note.classList.add('warn');
       note.textContent = 'Macros permises sur ton clavier principal : choisis des touches dont tu ne te sers pas pour écrire (F13 à F19, Pause, Défil, pavé numérique…). Une touche qui reçoit une macro ne fera plus son travail normal.';
+    } else if (hasBanks(kb) && !conf.separateG) {
+      note.classList.add('warn');
+      note.innerHTML = '<span>' + esc('G710+ reconnu : sans le logiciel de Logitech, ses touches G1 à G6 tapent aussi 1 à 6.') + '</span>'
+        + '<button type="button" class="btn btn-sm btn-primary" data-act="g710-separate">Séparer les touches G</button>';
+    } else if (hasBanks(kb)) {
+      note.innerHTML = '<span>' + esc('G710+ : touches G séparées des chiffres. M1, M2 et M3 changent de banque (le voyant suit).') + '</span>'
+        + '<button type="button" class="btn btn-sm" data-act="g710-unseparate" title="Les touches G retaperont 1 à 6 après avoir débranché et rebranché le clavier.">Ne plus séparer</button>';
     } else if (!cfg.principal && st.keyboards.filter(isReal).length > 1) {
       note.classList.add('warn');
       note.textContent = 'Première chose à faire : va dans l’onglet de ton clavier de tous les jours et clique « C’est mon clavier principal ».';
@@ -414,12 +474,16 @@
     const allowed = macrosAllowed(kb);
     board.els.forEach(({ el, k }) => {
       if (k.na) { el.title = k.tip; return; }
-      const entry = conf.keys[k.id];
+      const isBankKey = hasBanks(kb) && BANKS.includes(k.id);
+      const entry = isBankKey ? null : conf.keys[storeId(kb, k.id)];
+      const bankOn = isBankKey && k.id === bankOf(kb);
       el.classList.toggle('set', !!entry);
-      el.classList.toggle('edit', allowed && k.id === editKey);
+      el.classList.toggle('edit', allowed && !isBankKey && k.id === editKey);
+      el.classList.toggle('bank-on', bankOn);
+      el.classList.toggle('gkey', isGKey(k.id));
       el.classList.toggle('down', down.has(k.id));
       el.classList.toggle('locked', !allowed);
-      el.title = k.tip + (entry ? ' — ' + displayName(entry) : (allowed ? ' — libre' : ''));
+      el.title = k.tip + (isBankKey ? (bankOn ? ' (banque active)' : '') : entry ? ' — ' + displayName(entry) : (allowed ? ' — libre' : ''));
     });
   }
 
@@ -429,6 +493,7 @@
     const kb = byId(st.selected);
     if (!kb) return;
     if (!macrosAllowed(kb)) { toast('Ce clavier est verrouillé. Allume « Macros permises » pour modifier ses touches.'); return; }
+    if (hasBanks(kb) && BANKS.includes(d.dataset.kid)) { setBank(kb, d.dataset.kid); return; }
     setEdit(kb, d.dataset.kid);
   });
 
@@ -444,6 +509,28 @@
     kbConf(kb).layout = e.target.value;
     changed();
     renderCard(kb);
+  });
+
+  $('bank').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-bank]');
+    const kb = byId(st.selected);
+    if (b && kb) setBank(kb, b.dataset.bank);
+  });
+
+  $('kb-note').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    const kb = byId(st.selected);
+    if (!b || !kb) return;
+    if (b.dataset.act === 'g710-separate') {
+      b.disabled = true;
+      if (await separateG(kb, false)) { kbConf(kb).separateG = true; changed(); syncLeds(kb); }
+      renderCard(kb);
+    } else if (b.dataset.act === 'g710-unseparate') {
+      delete kbConf(kb).separateG;
+      changed();
+      renderCard(kb);
+      toast('C’est noté. Débranche et rebranche le G710+ : ses touches G retaperont 1 à 6.');
+    }
   });
 
   $('role').addEventListener('click', (e) => {
@@ -503,8 +590,10 @@
 
     const conf = kbConf(kb);
     const ek = st.edit[kb.id] || null;
-    const entry = ek ? conf.keys[ek] : null;
+    const sid = ek ? storeId(kb, ek) : null;
+    const entry = sid ? conf.keys[sid] : null;
     const label = keyLabel(ek);
+    const bankNote = hasBanks(kb) && isGKey(ek) ? ' (banque ' + bankOf(kb) + ')' : '';
     const big = label.length > 6 ? 22 : (label.length > 3 ? 30 : 46);
     const assignedCount = Object.keys(conf.keys).length;
 
@@ -514,7 +603,7 @@
       + '<p>Appuie sur une touche de ce clavier, ou clique-la sur le dessin.</p>'
       + (ek
         ? '<div class="bigkey" style="font-size:' + big + 'px">' + esc(label) + '</div>'
-          + '<div class="box info"><strong>Tu modifies la touche ' + esc(label) + '</strong>' + esc(keyTip(ek) !== label ? keyTip(ek) : '') + '</div>'
+          + '<div class="box info"><strong>Tu modifies la touche ' + esc(label + bankNote) + '</strong>' + esc(keyTip(ek) !== label ? keyTip(ek) : '') + '</div>'
           + (entry
             ? '<div class="box warn">Cette touche fait déjà « ' + esc(displayName(entry)) + ' ». Tes changements remplacent l’ancienne version.</div>'
             : '<div class="box ok">Cette touche est libre. Ajoute une action à l’étape 2 et elle deviendra bleue sur le dessin.</div>')
@@ -564,8 +653,8 @@
     const name = $('macro-name');
     if (name) {
       name.addEventListener('input', () => {
-        const e = conf.keys[ek];
-        if (!e) { if (!name.value.trim()) return; conf.keys[ek] = { name: name.value, actions: [] }; }
+        const e = conf.keys[sid];
+        if (!e) { if (!name.value.trim()) return; conf.keys[sid] = { name: name.value, actions: [] }; }
         else e.name = name.value;
         changed();
         paintBoard();
@@ -585,16 +674,17 @@
     const conf = kbConf(kb);
     const ek = st.edit[kb.id];
     if (!ek) return;
-    const entry = conf.keys[ek];
+    const sid = storeId(kb, ek);
+    const entry = conf.keys[sid];
     const i = Number(b.dataset.i);
     const save = () => {
-      if (entry && !entry.actions.length && !entry.name) delete conf.keys[ek];
+      if (entry && !entry.actions.length && !entry.name) delete conf.keys[sid];
       changed(); paintBoard(); renderSteps();
     };
     if (act === 'add') {
       openAction(b.dataset.type, null, (a) => {
-        if (!conf.keys[ek]) conf.keys[ek] = { name: '', actions: [] };
-        conf.keys[ek].actions.push(a);
+        if (!conf.keys[sid]) conf.keys[sid] = { name: '', actions: [] };
+        conf.keys[sid].actions.push(a);
         changed(); paintBoard(); renderSteps();
       });
     } else if (act === 'edit' && entry) {
@@ -602,7 +692,7 @@
       openAction(old.type, old, (a) => { entry.actions[i] = a; save(); });
     } else if (act === 'del' && entry) {
       entry.actions.splice(i, 1);
-      if (!entry.actions.length) delete conf.keys[ek];
+      if (!entry.actions.length) delete conf.keys[sid];
       save();
     } else if (act === 'up' && entry && i > 0) {
       [entry.actions[i - 1], entry.actions[i]] = [entry.actions[i], entry.actions[i - 1]]; save();
@@ -610,7 +700,7 @@
       [entry.actions[i + 1], entry.actions[i]] = [entry.actions[i], entry.actions[i + 1]]; save();
     } else if (act === 'clear-key' && entry) {
       confirmBox('Effacer la touche ' + keyLabel(ek) + ' ?', 'Ses ' + entry.actions.length + ' action(s) seront supprimées et la touche redeviendra libre.', 'Effacer', () => {
-        delete conf.keys[ek]; changed(); paintBoard(); renderSteps();
+        delete conf.keys[sid]; changed(); paintBoard(); renderSteps();
       });
     }
   });
@@ -658,8 +748,8 @@
     if (st.lineCount === 0) log.textContent = '';
     const kb = byId(ev.device);
     const color = kb && isReal(kb) ? TERM_COLORS[colorIndex(kb) % TERM_COLORS.length] : '#C4CAD4';
-    const codes = ev.make === undefined ? ev.code
-      : 'vk ' + KBKeymap.hex(ev.vkey, 2) + ' · scan ' + (ev.e0 ? 'E0 ' : '') + (ev.e1 ? 'E1 ' : '') + KBKeymap.hex(ev.make, 2);
+    const codes = ev.code
+      || ('vk ' + KBKeymap.hex(ev.vkey, 2) + ' · scan ' + (ev.e0 ? 'E0 ' : '') + (ev.e1 ? 'E1 ' : '') + KBKeymap.hex(ev.make, 2));
     const line = frag('<div class="line' + (ev.down ? '' : ' up') + '"><span class="t">' + clock(new Date()) + '</span>'
       + '<span class="tag" style="--c:' + color + '">' + esc(titleOf(kb)) + '</span>'
       + '<span class="k">' + esc(keyLabel(kid)) + '</span><span>' + (ev.down ? '↓' : '↑') + '</span>'
@@ -696,8 +786,15 @@
       pulseTab(ev.device);
       // Suivre le clavier utilisé (jamais vers le clavier principal : il sert à écrire).
       if (!busy && st.follow && isReal(kb) && !isPrincipal(kb) && ev.device !== st.selected) select(ev.device);
+      if (hasBanks(kb) && isGKey(kid)) st.lastG[kb.id] = Date.now();
+      // G710 : M1, M2, M3 changent de banque (même pendant qu'on écrit).
+      if (hasBanks(kb) && BANKS.includes(kid)) {
+        if (macrosAllowed(kb)) setBank(kb, kid);
+      // G710 pas encore séparé : G1 tape aussi « 1 » — on garde la touche G.
+      } else if (hasBanks(kb) && /^[1-6]$/.test(kid || '') && Date.now() - (st.lastG[kb.id] || 0) < 120) {
+        // rien
       // Étape 1 : la touche appuyée devient la touche en modification.
-      if (!busy && kb && ev.device === st.selected && kid && macrosAllowed(kb)) {
+      } else if (!busy && kb && ev.device === st.selected && kid && macrosAllowed(kb)) {
         if (board.els.some((x) => x.k.id === kid && !x.k.na)) {
           if (st.edit[kb.id] !== kid) setEdit(kb, kid);
         } else {
@@ -1053,7 +1150,7 @@
   // =====================================================================
   async function startLive() {
     await listen('kb-devices', (e) => setKeyboards(e.payload));
-    await listen('kb-key', (e) => onKey(e.payload, KBKeymap.fromRaw(e.payload)));
+    await listen('kb-key', (e) => onKey(e.payload, e.payload.key || KBKeymap.fromRaw(e.payload)));
     setKeyboards(await invoke('list_keyboards'));
   }
 

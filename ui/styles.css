@@ -142,7 +142,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* ---------- Grille principale ---------- */
 .main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-.row-top { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 12px; height: 318px; flex-shrink: 0; }
+.row-top { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 12px; height: 336px; flex-shrink: 0; }
 .row-steps { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 270px; gap: 12px; }
 
 /* ---------- Carte du clavier ---------- */
@@ -152,7 +152,16 @@ button:disabled { cursor: default; opacity: .5; }
 .kb-title h1 { margin: 2px 0 1px; font-family: var(--font-title); font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { font-size: 12.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.role { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.role-line { display: flex; align-items: center; gap: 12px; }
+.bank { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.bank:empty { display: none; }
+.bank .seg { padding: 3px; }
+.bank .seg button { min-height: 30px; padding: 0 12px; }
+.note:has(.btn) { display: flex; align-items: center; gap: 12px; padding-top: 5px; padding-bottom: 5px; }
+.note .btn { margin-left: auto; flex-shrink: 0; min-height: 28px; }
+.key.bank-on { background: var(--ok); color: #FFFFFF; border-color: var(--ok); border-bottom-color: #1F6B3E; font-weight: 700; }
+.key.gkey { font-weight: 600; }
+.role { align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .chip-principal { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; }
 .field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .field select { min-height: 34px; width: 290px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13px; }

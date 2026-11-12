@@ -28,6 +28,8 @@ pub struct Keyboard {
     pub is_virtual: bool,
     /// Bluetooth ou USB, quand on peut le savoir.
     pub bus: String,
+    /// Modèle reconnu, avec des touches spéciales (ex. « g710 »), vide sinon.
+    pub model: String,
 }
 
 /// Une touche appuyée ou relâchée.
@@ -43,6 +45,11 @@ pub struct KeyEvent {
     pub e1: bool,
     /// true = appuyée, false = relâchée.
     pub down: bool,
+    /// Nom de la touche quand elle ne vient pas du clavier « normal »
+    /// (touches G1-G6, M1-M3, MR du G710, touches multimédia…).
+    pub key: Option<String>,
+    /// Description des codes pour le terminal (ex. « G710 · rapport 03 »).
+    pub code: Option<String>,
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -55,7 +62,7 @@ pub enum Event {
 mod windows;
 
 #[cfg(windows)]
-pub use self::windows::{list, start};
+pub use self::windows::{g710_feature, list, start};
 
 #[cfg(windows)]
 pub const LIVE: bool = true;
@@ -69,6 +76,51 @@ pub fn start<F: Fn(Event) + Send + Sync + 'static>(_sink: F) {}
 #[cfg(not(windows))]
 pub fn list() -> Vec<Keyboard> {
     Vec::new()
+}
+
+#[cfg(not(windows))]
+pub fn g710_feature(_device: &str, _report: &[u8]) -> Result<u32, String> {
+    Err("disponible sous Windows seulement pour l'instant".into())
+}
+
+/// Modèles reconnus, qui ont des touches spéciales à lire autrement.
+#[allow(dead_code)]
+pub fn model_of(vid: &str, pid: &str) -> &'static str {
+    match (vid, pid) {
+        ("046D", "C24D") => "g710", // Logitech G710 et G710+
+        _ => "",
+    }
+}
+
+/// Nom d'une touche multimédia (page « Consumer » 0x0C du standard HID).
+#[allow(dead_code)]
+pub fn consumer_name(usage: u16) -> Option<&'static str> {
+    Some(match usage {
+        0xE9 => "VolUp",
+        0xEA => "VolDn",
+        0xE2 => "Mute",
+        0xCD => "Play",
+        0xB5 => "Next",
+        0xB6 => "Prev",
+        0xB7 => "Stop",
+        0x192 => "Calc",
+        0x18A => "Mail",
+        0x223 => "WebHome",
+        _ => return None,
+    })
+}
+
+/// Touches spéciales du G710 dans son rapport 0x03 (4 octets), d'après le pilote Linux hid-lg-g15 :
+/// bits 0-5 = G1-G6, bits 6-8 = M1-M3, bit 9 = MR.
+#[allow(dead_code)]
+pub const G710_KEYS: [&str; 10] = ["G1", "G2", "G3", "G4", "G5", "G6", "M1", "M2", "M3", "MR"];
+
+#[allow(dead_code)]
+pub fn g710_pressed(report: &[u8]) -> Option<u32> {
+    if report.len() < 4 || report[0] != 0x03 {
+        return None;
+    }
+    Some((report[1] & 0x3f) as u32 | (((report[2] & 0xf0) as u32) << 2) | (((report[3] & 0x07) as u32) << 10))
 }
 
 /// Trouve « VID_046D » et « PID_C326 » dans un chemin d'appareil Windows.
@@ -151,6 +203,15 @@ mod tests {
     fn ids_bluetooth() {
         let p = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&000205ac_PID&0256&Col01#9&1&0&0000#{884b96c3}";
         assert_eq!(parse_ids(p), ("05AC".into(), "0256".into()));
+    }
+
+    #[test]
+    fn g710_report() {
+        // G1 + M2 appuyées
+        let bits = g710_pressed(&[0x03, 0b0000_0001, 0b0010_0000, 0]).unwrap();
+        let names: Vec<_> = (0..10).filter(|b| bits & (1 << b) != 0).map(|b| G710_KEYS[b]).collect();
+        assert_eq!(names, vec!["G1", "M2"]);
+        assert_eq!(g710_pressed(&[0x02, 1, 0, 0]), None);
     }
 
     #[test]

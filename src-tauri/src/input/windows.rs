@@ -6,12 +6,18 @@
 //  - chaque touche arrive avec l'identité du clavier d'où elle vient;
 //  - les claviers branchés ou débranchés pendant que le programme roule sont détectés.
 //
+//  On écoute trois sortes de messages :
+//  - les touches ordinaires (page HID 0x01, usage 0x06 « clavier »);
+//  - les touches multimédia (page 0x0C « Consumer » : volume, lecture…);
+//  - les messages propres aux fabricants (page 0xFF00), pour les touches G1-G6,
+//    M1-M3 et MR du Logitech G710 / G710+.
+//
 //  Une petite fenêtre invisible (« message-only ») reçoit les messages WM_INPUT
 //  dans son propre fil d'exécution (thread), pour ne jamais ralentir l'interface.
 //  Rien n'est bloqué : c'est de la lecture seulement.
 // =====================================================================
 
-use super::{parse_ids, vendor_name, Event, KeyEvent, Keyboard};
+use super::{consumer_name, g710_pressed, model_of, parse_ids, vendor_name, Event, KeyEvent, Keyboard, G710_KEYS};
 use std::collections::HashMap;
 use std::mem::{size_of, zeroed};
 use std::ptr::{null, null_mut};
@@ -21,16 +27,24 @@ use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
     CM_Get_DevNode_PropertyW, CM_Get_Device_IDW, CM_Get_Parent, CM_Locate_DevNodeW,
     CM_LOCATE_DEVNODE_NORMAL, CR_SUCCESS,
 };
+use windows_sys::Win32::Devices::HumanInterfaceDevice::{
+    HidD_FreePreparsedData, HidD_GetPreparsedData, HidD_SetFeature, HidP_GetCaps, HidP_GetUsages, HidP_Input,
+    HIDP_CAPS, HIDP_STATUS_SUCCESS,
+};
 use windows_sys::Win32::Devices::Properties::{
     DEVPKEY_Device_BusReportedDeviceDesc, DEVPKEY_Device_DeviceDesc, DEVPKEY_Device_FriendlyName,
     DEVPROPKEY, DEVPROP_TYPE_STRING,
 };
-use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, WPARAM,
+};
+use windows_sys::Win32::Storage::FileSystem::{CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::{
     GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, RegisterRawInputDevices,
-    HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RIDEV_DEVNOTIFY,
-    RIDEV_INPUTSINK, RIDI_DEVICENAME, RID_INPUT, RIM_TYPEKEYBOARD,
+    HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RID_DEVICE_INFO,
+    RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDEV_PAGEONLY, RIDI_DEVICEINFO, RIDI_DEVICENAME, RIDI_PREPARSEDDATA,
+    RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
@@ -46,8 +60,15 @@ static SINK: OnceLock<Sink> = OnceLock::new();
 /// Mémoire : poignée Windows d'une interface clavier → identifiant de notre clavier.
 static GROUPS: OnceLock<Mutex<HashMap<usize, String>>> = OnceLock::new();
 
+/// Mémoire des appareils HID (touches multimédia, messages du G710) déjà examinés.
+static HIDS: OnceLock<Mutex<HashMap<usize, HidDevice>>> = OnceLock::new();
+
 fn groups() -> &'static Mutex<HashMap<usize, String>> {
     GROUPS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn hids() -> &'static Mutex<HashMap<usize, HidDevice>> {
+    HIDS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn send(event: Event) {
@@ -102,17 +123,27 @@ unsafe fn message_loop() {
         return;
     }
 
+    let item = size_of::<RAWINPUTDEVICE>() as u32;
     // Page 0x01 / usage 0x06 = « clavier ».
     // INPUTSINK : on reçoit les touches même quand Keyboard Bro n'est pas la fenêtre active.
     // DEVNOTIFY : on est prévenu quand un clavier est branché ou débranché.
-    let device = RAWINPUTDEVICE {
+    let keyboard = RAWINPUTDEVICE {
         usUsagePage: 0x01,
         usUsage: 0x06,
         dwFlags: RIDEV_INPUTSINK | RIDEV_DEVNOTIFY,
         hwndTarget: hwnd,
     };
-    if RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) == 0 {
+    if RegisterRawInputDevices(&keyboard, 1, item) == 0 {
         return;
+    }
+    // Facultatifs (si Windows refuse, les touches ordinaires marchent quand même) :
+    // touches multimédia, et messages propres aux fabricants (touches G du G710).
+    let extras = [
+        RAWINPUTDEVICE { usUsagePage: 0x0C, usUsage: 0x01, dwFlags: RIDEV_INPUTSINK, hwndTarget: hwnd },
+        RAWINPUTDEVICE { usUsagePage: 0xFF00, usUsage: 0x00, dwFlags: RIDEV_INPUTSINK | RIDEV_PAGEONLY, hwndTarget: hwnd },
+    ];
+    for extra in extras.iter() {
+        RegisterRawInputDevices(extra, 1, item);
     }
 
     send(Event::Devices(list()));
@@ -128,6 +159,9 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
     match msg {
         WM_INPUT => on_input(lparam as HRAWINPUT),
         WM_INPUT_DEVICE_CHANGE => {
+            if let Ok(mut h) = hids().lock() {
+                h.clear();
+            }
             send(Event::Devices(list()));
             return 0;
         }
@@ -141,7 +175,7 @@ unsafe fn on_input(handle: HRAWINPUT) {
     let header_size = size_of::<RAWINPUTHEADER>() as u32;
     let mut size: u32 = 0;
     GetRawInputData(handle, RID_INPUT, null_mut(), &mut size, header_size);
-    if size == 0 || size > 4096 {
+    if size == 0 || size > 16384 {
         return;
     }
     // Tampon aligné sur 8 octets (u64), comme l'exige la structure RAWINPUT.
@@ -150,6 +184,10 @@ unsafe fn on_input(handle: HRAWINPUT) {
         return;
     }
     let raw = &*(buffer.as_ptr() as *const RAWINPUT);
+    if raw.header.dwType == RIM_TYPEHID {
+        on_hid(raw, size as usize);
+        return;
+    }
     if raw.header.dwType != RIM_TYPEKEYBOARD {
         return;
     }
@@ -166,8 +204,237 @@ unsafe fn on_input(handle: HRAWINPUT) {
         e0: flags & RI_KEY_E0 != 0,
         e1: flags & RI_KEY_E1 != 0,
         down: flags & RI_KEY_BREAK == 0,
+        key: None,
+        code: None,
     }));
 }
+
+// ---------------------------------------------------------------------
+//  Appareils HID : touches multimédia et touches G du G710
+// ---------------------------------------------------------------------
+
+enum HidKind {
+    /// Messages propres au G710 (page 0xFF00) : G1-G6, M1-M3, MR.
+    G710,
+    /// Touches multimédia (page 0x0C), avec la « description » HID pour les décoder.
+    Consumer(Vec<u64>),
+    /// Autre appareil : on l'ignore.
+    Ignore,
+}
+
+struct HidDevice {
+    kind: HidKind,
+    group: String,
+    /// G710 : touches appuyées au dernier message (un bit par touche).
+    last_bits: u32,
+    /// Multimédia : touches appuyées au dernier message.
+    last_usages: Vec<u16>,
+}
+
+/// Fabricant, produit, page et usage d'un appareil HID.
+unsafe fn hid_info(device: HANDLE) -> Option<(u16, u16, u16, u16)> {
+    let mut info: RID_DEVICE_INFO = zeroed();
+    info.cbSize = size_of::<RID_DEVICE_INFO>() as u32;
+    let mut size = info.cbSize;
+    if GetRawInputDeviceInfoW(device, RIDI_DEVICEINFO, (&mut info as *mut RID_DEVICE_INFO).cast(), &mut size) == u32::MAX {
+        return None;
+    }
+    if info.dwType != RIM_TYPEHID {
+        return None;
+    }
+    let h = info.Anonymous.hid;
+    Some((h.dwVendorId as u16, h.dwProductId as u16, h.usUsagePage, h.usUsage))
+}
+
+/// « Description » HID d'un appareil (nécessaire pour décoder ses messages).
+unsafe fn preparsed(device: HANDLE) -> Option<Vec<u64>> {
+    let mut size: u32 = 0;
+    GetRawInputDeviceInfoW(device, RIDI_PREPARSEDDATA, null_mut(), &mut size);
+    if size == 0 || size > 65536 {
+        return None;
+    }
+    let mut buf = vec![0u64; (size as usize + 7) / 8];
+    if GetRawInputDeviceInfoW(device, RIDI_PREPARSEDDATA, buf.as_mut_ptr().cast(), &mut size) == u32::MAX {
+        return None;
+    }
+    Some(buf)
+}
+
+unsafe fn examine(device: HANDLE) -> HidDevice {
+    let ignore = HidDevice { kind: HidKind::Ignore, group: String::new(), last_bits: 0, last_usages: Vec::new() };
+    let Some((vid, pid, page, usage)) = hid_info(device) else { return ignore };
+    let kind = if page == 0xFF00 && model_of(&format!("{vid:04X}"), &format!("{pid:04X}")) == "g710" {
+        HidKind::G710
+    } else if page == 0x0C && usage == 0x01 {
+        match preparsed(device) {
+            Some(p) => HidKind::Consumer(p),
+            None => return ignore,
+        }
+    } else {
+        return ignore;
+    };
+    let Some(path) = device_path(device) else { return ignore };
+    let (v, p) = parse_ids(&path);
+    HidDevice { kind, group: group_id(&path, &v, &p), last_bits: 0, last_usages: Vec::new() }
+}
+
+fn special(device: &str, name: Option<&str>, down: bool, code: String) -> Event {
+    Event::Key(KeyEvent {
+        device: device.to_string(),
+        vkey: 0,
+        make: 0,
+        e0: false,
+        e1: false,
+        down,
+        key: name.map(str::to_string),
+        code: Some(code),
+    })
+}
+
+unsafe fn on_hid(raw: &RAWINPUT, total: usize) {
+    let device = raw.header.hDevice;
+    if device.is_null() {
+        return;
+    }
+    let hid = &raw.data.hid;
+    let each = hid.dwSizeHid as usize;
+    let count = hid.dwCount as usize;
+    let header = size_of::<RAWINPUTHEADER>() + 8; // en-tête + dwSizeHid + dwCount
+    if each == 0 || count == 0 || header + each * count > total {
+        return;
+    }
+    let base = hid.bRawData.as_ptr();
+
+    let mut events = Vec::new();
+    {
+        let Ok(mut map) = hids().lock() else { return };
+        let entry = map.entry(device as usize).or_insert_with(|| examine(device));
+        for i in 0..count {
+            let report = std::slice::from_raw_parts(base.add(i * each), each);
+            match &entry.kind {
+                HidKind::Ignore => return,
+                HidKind::G710 => {
+                    let Some(bits) = g710_pressed(report) else { continue };
+                    let changed = (bits ^ entry.last_bits) & 0x3ff;
+                    for (b, name) in G710_KEYS.iter().enumerate() {
+                        if changed & (1 << b) != 0 {
+                            let down = bits & (1 << b) != 0;
+                            events.push(special(&entry.group, Some(name), down, format!("G710 · rapport 03 · bit {b}")));
+                        }
+                    }
+                    entry.last_bits = bits;
+                }
+                HidKind::Consumer(desc) => {
+                    let mut usages = [0u16; 32];
+                    let mut len = usages.len() as u32;
+                    let status = HidP_GetUsages(
+                        HidP_Input,
+                        0x0C,
+                        0,
+                        usages.as_mut_ptr(),
+                        &mut len,
+                        desc.as_ptr() as isize,
+                        report.as_ptr() as *mut u8,
+                        each as u32,
+                    );
+                    // Un message d'une autre partie de l'appareil : on n'y touche pas.
+                    if status != HIDP_STATUS_SUCCESS {
+                        continue;
+                    }
+                    let now: Vec<u16> = usages[..(len as usize).min(usages.len())].iter().copied().filter(|&u| u != 0).collect();
+                    for &u in now.iter().filter(|u| !entry.last_usages.contains(u)) {
+                        events.push(special(&entry.group, consumer_name(u), true, format!("multimédia 0x{u:03X}")));
+                    }
+                    for &u in entry.last_usages.iter().filter(|u| !now.contains(u)) {
+                        events.push(special(&entry.group, consumer_name(u), false, format!("multimédia 0x{u:03X}")));
+                    }
+                    entry.last_usages = now;
+                }
+            }
+        }
+    }
+    for e in events {
+        send(e);
+    }
+}
+
+// ---------------------------------------------------------------------
+//  Commandes envoyées au G710 (rapports de configuration « feature »)
+//  - 0x09 rempli de zéros : les touches G cessent de taper 1 à 6
+//    (c'est ce que fait le pilote Linux hid-lg-g15 au démarrage);
+//  - 0x06 + masque : voyants M1 (0x10), M2 (0x20), M3 (0x40), MR (0x80).
+//  Aucun droit d'administrateur : c'est une partie « fabricant » du clavier,
+//  que Windows laisse ouvrir normalement.
+// ---------------------------------------------------------------------
+
+unsafe fn set_feature(path: &str, report: &[u8]) -> bool {
+    let name = wide(path);
+    let mut file = CreateFileW(name.as_ptr(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, null(), OPEN_EXISTING, 0, null_mut());
+    if file == INVALID_HANDLE_VALUE {
+        file = CreateFileW(name.as_ptr(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, null(), OPEN_EXISTING, 0, null_mut());
+    }
+    if file == INVALID_HANDLE_VALUE {
+        return false;
+    }
+    let mut ok = false;
+    let mut desc: isize = 0;
+    if HidD_GetPreparsedData(file, &mut desc) != 0 {
+        let mut caps: HIDP_CAPS = zeroed();
+        let length = if HidP_GetCaps(desc, &mut caps) == HIDP_STATUS_SUCCESS { caps.FeatureReportByteLength as usize } else { 0 };
+        HidD_FreePreparsedData(desc);
+        if length >= report.len() {
+            let mut buf = vec![0u8; length];
+            buf[..report.len()].copy_from_slice(report);
+            ok = HidD_SetFeature(file, buf.as_ptr().cast(), length as u32) != 0;
+        }
+    }
+    CloseHandle(file);
+    ok
+}
+
+/// Envoie un rapport de configuration à toutes les parties « fabricant » du G710 `device`.
+/// Retourne combien l'ont accepté.
+pub fn g710_feature(device: &str, report: &[u8]) -> Result<u32, String> {
+    unsafe {
+        let item_size = size_of::<RAWINPUTDEVICELIST>() as u32;
+        let mut count: u32 = 0;
+        GetRawInputDeviceList(null_mut(), &mut count, item_size);
+        let mut items: Vec<RAWINPUTDEVICELIST> = vec![zeroed(); count as usize];
+        let got = GetRawInputDeviceList(items.as_mut_ptr(), &mut count, item_size);
+        if got == u32::MAX {
+            return Err("liste des appareils illisible".into());
+        }
+        items.truncate(got as usize);
+        let mut found = 0;
+        let mut accepted = 0;
+        for item in items.iter().filter(|d| d.dwType == RIM_TYPEHID) {
+            let Some((vid, pid, page, _)) = hid_info(item.hDevice) else { continue };
+            if page != 0xFF00 || model_of(&format!("{vid:04X}"), &format!("{pid:04X}")) != "g710" {
+                continue;
+            }
+            let Some(path) = device_path(item.hDevice) else { continue };
+            let (v, p) = parse_ids(&path);
+            if group_id(&path, &v, &p) != device {
+                continue;
+            }
+            found += 1;
+            if set_feature(&path, report) {
+                accepted += 1;
+            }
+        }
+        if found == 0 {
+            Err("aucune partie « fabricant » du G710 trouvée (le logiciel de Logitech la garde peut-être pour lui)".into())
+        } else if accepted == 0 {
+            Err("le clavier a refusé la commande".into())
+        } else {
+            Ok(accepted)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+//  Identification des claviers
+// ---------------------------------------------------------------------
 
 /// Identifiant de notre clavier pour une poignée Windows.
 unsafe fn group_of(device: HANDLE) -> String {
@@ -300,7 +567,7 @@ unsafe fn details(path: &str) -> Details {
                 }
             }
             // Appareil USB complet (pas une de ses « interfaces » MI_xx), ou appareil Bluetooth :
-            // c'est notre groupe (toutes ses interfaces clavier = un seul clavier).
+            // c'est notre groupe (toutes ses interfaces = un seul clavier).
             let whole_usb = up.starts_with("USB\\") && !up.contains("&MI_");
             let bluetooth = up.starts_with("BTHLE\\") || up.starts_with("BTHENUM\\");
             if out.group.is_none() && (whole_usb || bluetooth) {
@@ -311,6 +578,18 @@ unsafe fn details(path: &str) -> Details {
     }
     out.name = candidates.into_iter().find(|c| !is_generic(c));
     out
+}
+
+/// Identifiant d'un clavier : l'appareil USB/Bluetooth complet, pour que toutes ses parties
+/// (touches ordinaires, multimédia, touches G) soient reconnues comme le même clavier.
+unsafe fn group_id(path: &str, vid: &str, pid: &str) -> String {
+    if vid.is_empty() {
+        return format!("virtuel:{}", instance_id(path).to_ascii_lowercase());
+    }
+    details(path)
+        .group
+        .map(|g| g.to_ascii_lowercase())
+        .unwrap_or_else(|| format!("{}:{}", vid, pid).to_ascii_lowercase())
 }
 
 /// Liste des claviers branchés. Les interfaces d'un même appareil sont regroupées.
@@ -357,8 +636,11 @@ pub fn list() -> Vec<Keyboard> {
                 continue;
             }
             let vendor = vendor_name(&vid).to_string();
+            let model = model_of(&vid, &pid).to_string();
             let name = info.name.clone().unwrap_or_else(|| {
-                if is_virtual {
+                if model == "g710" {
+                    "Logitech G710+".into()
+                } else if is_virtual {
                     if path.to_ascii_uppercase().contains("RDP") {
                         "Clavier du bureau à distance".into()
                     } else {
@@ -379,6 +661,7 @@ pub fn list() -> Vec<Keyboard> {
                 interfaces: 1,
                 is_virtual,
                 bus: info.bus,
+                model,
             });
         }
 
