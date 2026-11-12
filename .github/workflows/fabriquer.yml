@@ -33,9 +33,9 @@ jobs:
             bundles: app
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -73,7 +73,7 @@ jobs:
           ditto -c -k --keepParent "Keyboard Bro.app" "$GITHUB_WORKSPACE/out/KeyboardBro-${{ matrix.name }}.zip"
           ls -la "$GITHUB_WORKSPACE/out"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: KeyboardBro-${{ matrix.name }}
           path: out/*
