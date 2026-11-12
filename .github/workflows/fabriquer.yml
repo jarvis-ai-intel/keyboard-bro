@@ -73,7 +73,7 @@ jobs:
           ditto -c -k --keepParent "Keyboard Bro.app" "$GITHUB_WORKSPACE/out/KeyboardBro-${{ matrix.name }}.zip"
           ls -la "$GITHUB_WORKSPACE/out"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: KeyboardBro-${{ matrix.name }}
           path: out/*
