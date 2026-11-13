@@ -7,6 +7,7 @@
 //  - configuration des touches (étapes 1-2-3), sauvegardée dans keyboard-bro.json;
 //  - les touches programmées du clavier à macros sont cachées aux autres programmes
 //    et lancent leurs actions (module « macros »).
+//  - Réglages : démarrer avec Windows / le Mac (module « autostart »).
 //
 //  L'interface (dossier « ui ») parle au cœur par :
 //  - des commandes (list_keyboards, set_bindings, load_config, save_config, list_browsers…);
@@ -14,6 +15,7 @@
 //    « kb-notice » (un message, ex. une macro qui n'a pas marché).
 // =====================================================================
 
+mod autostart;
 mod browsers;
 mod config;
 mod input;
@@ -72,6 +74,8 @@ fn platform_info() -> serde_json::Value {
 }
 
 /// Taille de départ : la plus grande possible sans dépasser MAX_W × MAX_H ni l'écran.
+/// Si Keyboard Bro part avec l'ordinateur (et que le réglage le demande),
+/// la fenêtre s'ouvre réduite dans la barre des tâches / le Dock : les macros marchent quand même.
 fn size_window(app: &tauri::App) {
     let Some(win) = app.get_webview_window("main") else { return };
     let monitor = win.current_monitor().ok().flatten().or_else(|| win.primary_monitor().ok().flatten());
@@ -85,6 +89,9 @@ fn size_window(app: &tauri::App) {
     let _ = win.set_max_size(Some(PhysicalSize::new(MAX_W, MAX_H)));
     let _ = win.center();
     let _ = win.show();
+    if autostart::started_at_login() && config::start_minimized(app.handle()) {
+        let _ = win.minimize();
+    }
 }
 
 pub fn run() {
@@ -92,6 +99,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             size_window(app);
+            autostart::refresh();
             let notice = app.handle().clone();
             macros::set_notify(move |ok, text| {
                 let _ = notice.emit("kb-notice", serde_json::json!({ "ok": ok, "text": text }));
@@ -121,6 +129,8 @@ pub fn run() {
             config::export_config,
             config::import_config,
             browsers::list_browsers,
+            autostart::autostart_state,
+            autostart::set_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("Keyboard Bro n'a pas pu démarrer");

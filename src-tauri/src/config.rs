@@ -90,6 +90,16 @@ pub fn load_config(app: AppHandle) -> Loaded {
     }
 }
 
+/// Réglage « Ouvrir la fenêtre réduite » quand Keyboard Bro part avec l'ordinateur.
+/// Oui par défaut (si le fichier n'existe pas ou ne le dit pas).
+pub fn start_minimized(app: &AppHandle) -> bool {
+    fs::read_to_string(config_path(app))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v.get("startMinimized").and_then(|b| b.as_bool()))
+        .unwrap_or(true)
+}
+
 #[tauri::command]
 pub fn save_config(app: AppHandle, json: String) -> Result<String, String> {
     check_json(&json)?;

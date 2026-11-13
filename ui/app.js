@@ -1,5 +1,5 @@
 // =====================================================================
-//  Keyboard Bro — l'interface (version 0.4)
+//  Keyboard Bro — l'interface (version 0.4.1)
 //
 //  En haut : le dessin du clavier (à gauche) et le terminal en direct (à droite).
 //  En bas  : Étape 1 (choisir la touche), Étape 2 (ce que fait la touche),
@@ -8,6 +8,7 @@
 //  La configuration est gardée dans keyboard-bro.json (voir src-tauri/src/config.rs).
 //  Les touches programmées sont envoyées au cœur du programme (set_bindings) : sous
 //  Windows, il les cache aux autres programmes et lance leurs actions.
+//  Bouton ⚙ en haut à droite : Réglages (démarrer avec l'ordinateur, fenêtre réduite).
 // =====================================================================
 'use strict';
 
@@ -42,7 +43,8 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
     download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
     upload: '<path d="M12 21V9M7 14l5-5 5 5M5 3h14"/>',
-    dots: '<path d="M12 5v.01M12 12v.01M12 19v.01"/>'
+    dots: '<path d="M12 5v.01M12 12v.01M12 19v.01"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
   };
   const svg = (name, size = 16, sw = 2) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name] || ''}</svg>`;
 
@@ -122,7 +124,7 @@
   // =====================================================================
   //  Configuration (keyboard-bro.json)
   // =====================================================================
-  const newConfig = () => ({ app: 'keyboard-bro', version: 1, principal: null, principalMacros: false, order: [], keyboards: {} });
+  const newConfig = () => ({ app: 'keyboard-bro', version: 1, principal: null, principalMacros: false, startMinimized: true, order: [], keyboards: {} });
   let cfg = newConfig();
   let cfgPath = '';
   let saveState = 'ok';
@@ -135,6 +137,7 @@
     const out = newConfig();
     out.principal = typeof c.principal === 'string' ? c.principal : null;
     out.principalMacros = !!c.principalMacros;
+    out.startMinimized = c.startMinimized !== false;   // oui par défaut
     out.order = Array.isArray(c.order) ? c.order.filter((x) => typeof x === 'string') : [];
     const layouts = KBLayouts.layoutInfo();
     if (c.keyboards && typeof c.keyboards === 'object') {
@@ -928,7 +931,7 @@
       + '<button type="button" class="icon-btn" data-x aria-label="Fermer">' + svg('x', 16) + '</button></div>'
       + '<div class="dlg-body"></div>'
       + '<div class="dlg-foot"><span class="dlg-msg muted"></span><span class="spacer"></span>'
-      + '<button type="button" class="btn" data-x>Annuler</button>'
+      + (o.noCancel ? '' : '<button type="button" class="btn" data-x>Annuler</button>')
       + '<button type="button" class="btn ' + (o.danger ? 'btn-danger' : 'btn-primary') + '" data-ok>' + esc(o.okText || 'Ajouter à la suite') + '</button></div></div></div>');
     wrap.querySelector('.dlg-body').append(o.body);
     const api = {
@@ -1248,6 +1251,74 @@
     });
   }
 
+
+  // =====================================================================
+  //  Réglages (bouton ⚙ en haut à droite)
+  // =====================================================================
+  let platform = null;   // réponse de platform_info
+
+  function osWord() {
+    const os = platform && platform.os;
+    return os === 'windows' ? 'Windows' : os === 'macos' ? 'le Mac' : 'l’ordinateur';
+  }
+
+  async function openSettings() {
+    let auto = null;
+    if (invoke) { try { auto = await invoke('autostart_state'); } catch (e) { auto = { supported: false, enabled: false, message: String(e) }; } }
+    else auto = { supported: false, enabled: false, message: 'Disponible dans le programme seulement (ici, c’est un aperçu).' };
+    const mac = platform && platform.os === 'macos';
+    const where = mac ? 'le Dock' : 'la barre des tâches';
+    const body = frag('<div class="dlg-body" style="padding:0;gap:0">'
+      + '<section class="set-section">'
+      + '<div class="eyebrow">Démarrage</div>'
+      + '<div class="set-row"><button type="button" class="switch" role="switch" data-auto aria-labelledby="set-auto-t"><span></span></button>'
+      + '<div class="set-text"><strong id="set-auto-t">Démarrer Keyboard Bro avec ' + esc(osWord()) + '</strong>'
+      + '<span>Keyboard Bro s’ouvre tout seul quand tu ouvres ta session : tes macros sont prêtes sans y penser.</span></div></div>'
+      + '<div class="note set-note" data-auto-note hidden></div>'
+      + '<div class="set-row set-sub" data-min-row><button type="button" class="switch" role="switch" data-min aria-labelledby="set-min-t"><span></span></button>'
+      + '<div class="set-text"><strong id="set-min-t">Ouvrir la fenêtre réduite</strong>'
+      + '<span>Au démarrage de ' + esc(osWord()) + ', la fenêtre reste dans ' + where + '. Les macros marchent quand même.</span></div></div>'
+      + '</section>'
+      + '<section class="set-section">'
+      + '<div class="eyebrow">Fichier de configuration</div>'
+      + '<div class="set-path mono" data-cfg></div>'
+      + '</section></div>');
+    const autoBtn = body.querySelector('[data-auto]'), minBtn = body.querySelector('[data-min]');
+    const note = body.querySelector('[data-auto-note]'), minRow = body.querySelector('[data-min-row]');
+    body.querySelector('[data-cfg]').textContent = cfgPath || '(pas encore sauvegardé)';
+    let busy = false;
+    const paint = () => {
+      autoBtn.setAttribute('aria-checked', String(!!auto.enabled));
+      autoBtn.disabled = !auto.supported || busy;
+      minBtn.setAttribute('aria-checked', String(cfg.startMinimized));
+      minRow.classList.toggle('off', !auto.enabled);
+      let text = '', warn = false;
+      if (auto.message) { text = auto.message; warn = true; }
+      else if (auto.blocked) { text = 'Keyboard Bro a été désactivé dans le Gestionnaire des tâches (onglet « Applications de démarrage »). Allume l’interrupteur pour le réactiver.'; warn = true; }
+      else if (auto.other) { text = 'Le démarrage lance une autre copie de Keyboard Bro : ' + auto.other + '. Éteins puis rallume l’interrupteur pour utiliser celle-ci.'; warn = true; }
+      else if (auto.enabled && platform && platform.os === 'windows') text = 'Si tu déplaces le fichier de Keyboard Bro, ouvre-le une fois à sa nouvelle place : le démarrage se met à jour tout seul.';
+      else if (auto.enabled && mac) text = 'macOS peut afficher « Élément d’ouverture ajouté » : c’est normal. Tu le retrouves dans Réglages Système › Général › Ouverture.';
+      note.hidden = !text;
+      note.textContent = text;
+      note.classList.toggle('warn', warn);
+    };
+    autoBtn.addEventListener('click', async () => {
+      if (busy || !auto.supported) return;
+      const want = !auto.enabled;
+      busy = true; paint();
+      try {
+        auto = await invoke('set_autostart', { on: want });
+        toast(want ? 'Keyboard Bro démarrera avec ' + osWord() + '.' : 'Keyboard Bro ne démarrera plus tout seul.');
+      } catch (e) {
+        auto = Object.assign({}, auto, { message: String(e) });
+      }
+      busy = false; paint();
+    });
+    minBtn.addEventListener('click', () => { cfg.startMinimized = !cfg.startMinimized; changed(); paint(); });
+    paint();
+    openModal({ kind: 'gear', title: 'Réglages', sub: 'Les changements sont appliqués tout de suite.', body, okText: 'Fermer', noCancel: true, onOk: () => {} });
+  }
+
   // =====================================================================
   //  Démarrage
   // =====================================================================
@@ -1278,6 +1349,9 @@
     fit();
     let info = null;
     if (invoke) { try { info = await invoke('platform_info'); } catch { info = null; } }
+    platform = info;
+    $('settings-btn').innerHTML = svg('gear', 18);
+    $('settings-btn').addEventListener('click', openSettings);
     $('footer-left').textContent = 'Keyboard Bro ' + (info ? info.version + ' · ' + info.os + ' ' + info.arch : '(aperçu)');
     st.live = !!(info && info.live);
     await loadConfig();
