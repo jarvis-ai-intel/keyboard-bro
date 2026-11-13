@@ -149,7 +149,7 @@ unsafe fn message_loop() {
         hwndTarget: hwnd,
     };
     if RegisterRawInputDevices(&keyboard, 1, item) == 0 {
-        set_status(false, "Windows a refusé de laisser lire les claviers.".into());
+        set_status(false, tr!("Windows a refusé de laisser lire les claviers.", "Windows refused to let the keyboards be read.", "Windows no permitió leer los teclados."));
         return;
     }
     // Facultatifs (si Windows refuse, les touches ordinaires marchent quand même) :
@@ -351,7 +351,7 @@ unsafe fn decide(device: &str, raw: Option<(u16, bool, u16)>, special: Option<&s
     };
     out.fired = Some(fire.0.clone());
     if own_window_active() {
-        out.skipped = Some("Keyboard Bro est la fenêtre active".into());
+        out.skipped = Some(tr!("Keyboard Bro est la fenêtre active", "Keyboard Bro is the active window", "Keyboard Bro es la ventana activa"));
     } else {
         send(Event::Fire(fire.0, fire.1));
     }
@@ -605,19 +605,19 @@ fn fnv(bytes: &[u8]) -> u32 {
 
 fn extract_dll() -> Result<std::path::PathBuf, String> {
     if HOOK_DLL.is_empty() {
-        return Err("le DLL de blocage manque dans cette version".into());
+        return Err(tr!("le DLL de blocage manque dans cette version", "the blocking DLL is missing from this version", "falta la DLL de bloqueo en esta versión"));
     }
     let base = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
     let dir = base.join("com.jarvis.keyboardbro");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("dossier {} impossible à créer ({e})", dir.display()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| { let d = dir.display(); tr!("dossier {d} impossible à créer ({e})", "couldn’t create folder {d} ({e})", "no se pudo crear la carpeta {d} ({e})") })?;
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
     let name = format!("kbhook-{}-{}-{:08x}.dll", env!("CARGO_PKG_VERSION"), arch, fnv(HOOK_DLL));
     let path = dir.join(&name);
     let same = std::fs::read(&path).map(|b| b == HOOK_DLL).unwrap_or(false);
     if !same {
         let tmp = dir.join(format!("{name}.tmp"));
-        std::fs::write(&tmp, HOOK_DLL).map_err(|e| format!("copie du DLL impossible ({e})"))?;
-        std::fs::rename(&tmp, &path).map_err(|e| format!("copie du DLL impossible ({e})"))?;
+        std::fs::write(&tmp, HOOK_DLL).map_err(|e| tr!("copie du DLL impossible ({e})", "couldn’t copy the DLL ({e})", "no se pudo copiar la DLL ({e})"))?;
+        std::fs::rename(&tmp, &path).map_err(|e| tr!("copie du DLL impossible ({e})", "couldn’t copy the DLL ({e})", "no se pudo copiar la DLL ({e})"))?;
     }
     // Ménage : les DLL des anciennes versions (ceux encore utilisés par un programme restent là).
     if let Ok(entries) = std::fs::read_dir(&dir) {
@@ -634,7 +634,7 @@ fn extract_dll() -> Result<std::path::PathBuf, String> {
 unsafe fn install_hook(hwnd: HWND) -> Result<(), String> {
     let query = RegisterWindowMessageW(wide("KeyboardBro.Query.v1").as_ptr());
     if query == 0 {
-        return Err("Windows a refusé le message de blocage".into());
+        return Err(tr!("Windows a refusé le message de blocage", "Windows refused the blocking message", "Windows rechazó el mensaje de bloqueo"));
     }
     QUERY.store(query, Ordering::Relaxed);
     // Les programmes « protégés » (ex. navigateurs) ont le droit de nous poser la question.
@@ -643,15 +643,17 @@ unsafe fn install_hook(hwnd: HWND) -> Result<(), String> {
     let path = extract_dll()?;
     let module = LoadLibraryW(wide(&path.to_string_lossy()).as_ptr());
     if module.is_null() {
-        return Err(format!("le DLL de blocage n'a pas pu être chargé (erreur {}). Un antivirus le bloque peut-être.", GetLastError()));
+        let code = GetLastError();
+        return Err(tr!("le DLL de blocage n'a pas pu être chargé (erreur {code}). Un antivirus le bloque peut-être.", "the blocking DLL couldn’t be loaded (error {code}). An antivirus may be blocking it.", "no se pudo cargar la DLL de bloqueo (error {code}). Quizá un antivirus la bloquea."));
     }
     let Some(proc_addr) = GetProcAddress(module, b"KbbKeyboardProc\0".as_ptr()) else {
-        return Err("le DLL de blocage est incomplet".into());
+        return Err(tr!("le DLL de blocage est incomplet", "the blocking DLL is incomplete", "la DLL de bloqueo está incompleta"));
     };
     let proc: HOOKPROC = std::mem::transmute(proc_addr);
     let hook = SetWindowsHookExW(WH_KEYBOARD, proc, module, 0);
     if hook.is_null() {
-        return Err(format!("Windows a refusé le blocage des touches (erreur {}).", GetLastError()));
+        let code = GetLastError();
+        return Err(tr!("Windows a refusé le blocage des touches (erreur {code}).", "Windows refused to block the keys (error {code}).", "Windows rechazó el bloqueo de teclas (error {code})."));
     }
     Ok(())
 }
@@ -700,7 +702,7 @@ pub fn g710_feature(device: &str, report: &[u8]) -> Result<u32, String> {
         let mut items: Vec<RAWINPUTDEVICELIST> = vec![zeroed(); count as usize];
         let got = GetRawInputDeviceList(items.as_mut_ptr(), &mut count, item_size);
         if got == u32::MAX {
-            return Err("liste des appareils illisible".into());
+            return Err(tr!("liste des appareils illisible", "device list unreadable", "lista de dispositivos ilegible"));
         }
         items.truncate(got as usize);
         let mut found = 0;
@@ -721,9 +723,9 @@ pub fn g710_feature(device: &str, report: &[u8]) -> Result<u32, String> {
             }
         }
         if found == 0 {
-            Err("aucune partie « fabricant » du G710 trouvée (le logiciel de Logitech la garde peut-être pour lui)".into())
+            Err(tr!("aucune partie « fabricant » du G710 trouvée (le logiciel de Logitech la garde peut-être pour lui)", "no “vendor” part of the G710 found (Logitech’s software may be keeping it for itself)", "no se encontró la parte «fabricante» del G710 (quizá el programa de Logitech la reserva para sí)"))
         } else if accepted == 0 {
-            Err("le clavier a refusé la commande".into())
+            Err(tr!("le clavier a refusé la commande", "the keyboard refused the command", "el teclado rechazó el comando"))
         } else {
             Ok(accepted)
         }

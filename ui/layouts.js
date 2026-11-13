@@ -2,15 +2,15 @@
 //  Keyboard Bro — dispositions de clavier (dessin générique)
 //  Unités : 1 = largeur d'une touche ordinaire. x, y = position; w, h = taille.
 //  Chaque touche a un identifiant (id) commun à toutes les dispositions.
+//  Les noms et les bulles d'aide sont traduits ici (tr, voir i18n.js); l'identifiant ne change jamais.
 // =====================================================================
 'use strict';
 const KBLayouts = {
   layoutDef(id) {
     if (id === 'g710') return this.g710();
     const K = [];
-    const add = (sec, kid, label, x, y, w, h, tip, na) => K.push({ sec: sec, id: kid, label: label, x: x, y: y, w: w || 1, h: h || 1, tip: tip || label, na: !!na });
+    const add = (sec, kid, label, x, y, w, h, tip, na) => K.push({ sec: sec, id: kid, label: tr(label), x: x, y: y, w: w || 1, h: h || 1, tip: tr(tip || label), na: !!na });
     const run = (y, x0, labels) => labels.forEach((l, n) => add('main', l, l, x0 + n, y));
-    const free = ' — presque aucun logiciel ne l’utilise : idéale pour une macro';
     const fnRow = (y, withTop) => {
       add('fn', 'Esc', 'Échap', 0, y);
       ['F1', 'F2', 'F3', 'F4'].forEach((l, n) => add('fn', l, l, 2 + n, y));
@@ -90,7 +90,7 @@ const KBLayouts = {
       add('nav', 'Left', '←', 15.5, y1 + 4, 1, 1, 'Flèche gauche'); add('nav', 'Down', '↓', 16.5, y1 + 4, 1, 1, 'Flèche bas'); add('nav', 'Right', '→', 17.5, y1 + 4, 1, 1, 'Flèche droite');
     };
     const pad = (x0, y1, mac) => {
-      const P = (kid, label, x, y, w, h, tip) => add('pad', kid, label, x0 + x, y1 + y, w, h, tip || ('Pavé ' + label));
+      const P = (kid, label, x, y, w, h, tip) => add('pad', kid, label, x0 + x, y1 + y, w, h, tip || tr('Pavé {k}', { k: label }));
       if (mac) {
         P('NumLk', 'clear', 0, 0, 1, 1, 'clear (Verr. num pour Windows)'); P('NumEq', '=', 1, 0); P('NumDiv', '/', 2, 0); P('NumMul', '*', 3, 0);
         P('Num7', '7', 0, 1); P('Num8', '8', 1, 1); P('Num9', '9', 2, 1); P('NumSub', '-', 3, 1);
@@ -139,8 +139,9 @@ const KBLayouts = {
       ['F1', 'F2', 'F3', 'F4'].forEach((l, n) => add('fn', l, l, 2 + n, 0));
       ['F5', 'F6', 'F7', 'F8'].forEach((l, n) => add('fn', l, l, 6.5 + n, 0));
       ['F9', 'F10', 'F11', 'F12'].forEach((l, n) => add('fn', l, l, 11 + n, 0));
-      ['F13', 'F14', 'F15'].forEach((l, n) => add('fn', l, l, 15.5 + n, 0, 1, 1, l + free));
-      ['F16', 'F17', 'F18', 'F19'].forEach((l, n) => add('fn', l, l, 19 + n, 0, 1, 1, l + free));
+      const free = (l) => tr('{k} — presque aucun logiciel ne l’utilise : idéale pour une macro', { k: l });
+      ['F13', 'F14', 'F15'].forEach((l, n) => add('fn', l, l, 15.5 + n, 0, 1, 1, free(l)));
+      ['F16', 'F17', 'F18', 'F19'].forEach((l, n) => add('fn', l, l, 19 + n, 0, 1, 1, free(l)));
       main(1.4, { mac: true, bottom: 'macfull' });
       navBlock(1.4, true);
       pad(19, 1.4, true);
@@ -155,18 +156,18 @@ const KBLayouts = {
   },
   layoutInfo() {
     return {
-      'full-ansi': 'Clavier complet, format américain (ANSI) : Entrée sur une seule rangée.',
-      'full-iso': 'Format ISO : Entrée en « L » sur deux rangées et une touche de plus à côté de Maj gauche. Courant au Québec et en Europe.',
-      'media': 'Clavier complet avec une rangée de touches multimédia (son, lecture, calculatrice…).',
-      'tkl-ansi': 'Sans pavé numérique, format ANSI.',
-      'tkl-iso': 'Sans pavé numérique, format ISO.',
-      'c75': 'Compact 75 % : tout est collé, les flèches et quelques touches sont sur le côté.',
-      'c65': 'Compact 65 % : pas de rangée F1–F12. Les F s’obtiennent avec Fn, que Windows ne voit pas.',
-      'c60': 'Compact 60 % : ni rangée F, ni flèches dédiées.',
-      'pad': 'Pavé numérique séparé : parfait comme petit clavier à macros.',
-      'mac-full': 'Clavier Apple avec pavé : F13 à F19 ne servent à presque rien dans Windows, ce sont des touches idéales pour des macros.',
-      'mac-compact': 'Magic Keyboard d’Apple : rangée du haut demi-hauteur et flèches en T inversé.',
-      'g710': 'Logitech G710 / G710+ : 6 touches G à gauche, banques M1, M2, M3 (chaque banque donne d’autres actions aux touches G), touche MR et touches multimédia.'
+      'full-ansi': tr('Clavier complet, format américain (ANSI) : Entrée sur une seule rangée.'),
+      'full-iso': tr('Format ISO : Entrée en « L » sur deux rangées et une touche de plus à côté de Maj gauche. Courant au Québec et en Europe.'),
+      'media': tr('Clavier complet avec une rangée de touches multimédia (son, lecture, calculatrice…).'),
+      'tkl-ansi': tr('Sans pavé numérique, format ANSI.'),
+      'tkl-iso': tr('Sans pavé numérique, format ISO.'),
+      'c75': tr('Compact 75 % : tout est collé, les flèches et quelques touches sont sur le côté.'),
+      'c65': tr('Compact 65 % : pas de rangée F1–F12. Les F s’obtiennent avec Fn, que Windows ne voit pas.'),
+      'c60': tr('Compact 60 % : ni rangée F, ni flèches dédiées.'),
+      'pad': tr('Pavé numérique séparé : parfait comme petit clavier à macros.'),
+      'mac-full': tr('Clavier Apple avec pavé : F13 à F19 ne servent à presque rien dans Windows, ce sont des touches idéales pour des macros.'),
+      'mac-compact': tr('Magic Keyboard d’Apple : rangée du haut demi-hauteur et flèches en T inversé.'),
+      'g710': tr('Logitech G710 / G710+ : 6 touches G à gauche, banques M1, M2, M3 (chaque banque donne d’autres actions aux touches G), touche MR et touches multimédia.')
     };
   },
   // Logitech G710 / G710+ : clavier complet + colonne G1-G6 à gauche + rangée M / multimédia en haut.
@@ -174,12 +175,12 @@ const KBLayouts = {
     const base = this.layoutDef('full-ansi');
     const dx = 1.45, dy = 0.95;
     const K = base.keys.map((k) => Object.assign({}, k, { x: k.x + dx, y: k.y + dy }));
-    const add = (sec, id, label, x, y, w, h, tip, na) => K.push({ sec: sec, id: id, label: label, x: x, y: y, w: w || 1, h: h || 1, tip: tip || label, na: !!na });
+    const add = (sec, id, label, x, y, w, h, tip, na) => K.push({ sec: sec, id: id, label: tr(label), x: x, y: y, w: w || 1, h: h || 1, tip: tr(tip || label), na: !!na });
     for (let n = 1; n <= 6; n++) {
-      add('g', 'G' + n, 'G' + n, 0, dy + (n - 1) * 0.9, 1.15, 0.82, 'G' + n + ' — touche programmable (ses actions changent avec la banque M1, M2, M3)');
+      add('g', 'G' + n, 'G' + n, 0, dy + (n - 1) * 0.9, 1.15, 0.82, tr('G{n} — touche programmable (ses actions changent avec la banque M1, M2, M3)', { n }));
     }
     const th = 0.72;
-    ['M1', 'M2', 'M3'].forEach((m, i) => add('m', m, m, dx + 2 + i, 0, 0.9, th, m + ' — banque ' + (i + 1) + ' : clique pour donner d’autres actions aux touches G'));
+    ['M1', 'M2', 'M3'].forEach((m, i) => add('m', m, m, dx + 2 + i, 0, 0.9, th, tr('{m} — banque {n} : clique pour donner d’autres actions aux touches G', { m, n: i + 1 })));
     add('m', 'MR', 'MR', dx + 5.2, 0, 0.9, th, 'MR — touche d’enregistrement (programmable dans Keyboard Bro)');
     add('m', 'GameMode', 'Jeu', dx + 6.5, 0, 1, th, 'Touche Jeu : désactive la touche Windows (gérée par le clavier lui-même)', true);
     add('m', 'Light1', 'Lum 1', dx + 10.6, 0, 1, th, 'Rétroéclairage zone 1 — ZQSD/WASD et flèches (géré par le clavier lui-même)', true);

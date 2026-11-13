@@ -1,5 +1,5 @@
 // =====================================================================
-//  Keyboard Bro — l'interface (version 0.4.2)
+//  Keyboard Bro — l'interface (version 0.5 : français, anglais, espagnol)
 //
 //  En haut : le dessin du clavier (à gauche) et le terminal en direct (à droite).
 //  En bas  : Étape 1 (choisir la touche), Étape 2 (ce que fait la touche),
@@ -49,11 +49,11 @@
   const svg = (name, size = 16, sw = 2) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name] || ''}</svg>`;
 
   const TYPES = {
-    prog: 'Ouvrir un programme',
-    url: 'Ouvrir une URL',
-    text: 'Coller du texte',
-    combo: 'Combinaison de touches',
-    wait: 'Attendre'
+    prog: tr('Ouvrir un programme'),
+    url: tr('Ouvrir une URL'),
+    text: tr('Coller du texte'),
+    combo: tr('Combinaison de touches'),
+    wait: tr('Attendre')
   };
 
   // ---------- Zoom : tout l'écran entre toujours dans la fenêtre ----------
@@ -73,12 +73,12 @@
   ['g710', 'mac-full', 'media', 'full-iso', 'full-ansi'].forEach((id) => {
     KBLayouts.layoutDef(id).keys.forEach((k) => { if (k.label) KEYINFO[k.id] = { label: k.label, tip: k.tip }; });
   });
-  Object.assign(KEYINFO, { Space: { label: 'Espace', tip: 'Espace' }, Enter: { label: 'Entrée', tip: 'Entrée' } });
+  Object.assign(KEYINFO, { Space: { label: tr('Espace'), tip: tr('Espace') }, Enter: { label: tr('Entrée'), tip: tr('Entrée') } });
   function keyLabel(kid) {
     if (!kid) return '?';
     const info = KEYINFO[kid];
     const label = info ? info.label : kid;
-    if (/^Num/.test(kid) && kid !== 'NumLk' && label.length <= 4) return 'Pavé ' + label;
+    if (/^Num/.test(kid) && kid !== 'NumLk' && label.length <= 4) return tr('Pavé {k}', { k: label });
     return label;
   }
   function keyTip(kid) { return (KEYINFO[kid] && KEYINFO[kid].tip) || keyLabel(kid); }
@@ -92,14 +92,14 @@
   };
   function comboName(kid) {
     if (COMBO_NAMES[kid]) return COMBO_NAMES[kid];
-    if (/^Num[0-9]$/.test(kid)) return 'Pavé ' + kid.slice(3);
+    if (/^Num[0-9]$/.test(kid)) return 'Pavé ' + kid.slice(3);   // nom gardé dans la config : toujours en français
     return keyLabel(kid);
   }
 
   // ---------- Petits utilitaires ----------
   const two = (n) => String(n).padStart(2, '0');
   const clock = (d) => two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
-  const fmtSec = (s) => String(Math.round(s * 10) / 10).replace('.', ',');
+  const fmtSec = (s) => KBI18n.num(Math.round(s * 10) / 10);
   const baseName = (p) => String(p || '').split(/[\\/]/).pop().replace(/\.(exe|lnk|bat|cmd|app)$/i, '');
   function isTyping(el) {
     if (!el) return false;
@@ -124,7 +124,7 @@
   // =====================================================================
   //  Configuration (keyboard-bro.json)
   // =====================================================================
-  const newConfig = () => ({ app: 'keyboard-bro', version: 1, principal: null, principalMacros: false, startMinimized: true, order: [], keyboards: {} });
+  const newConfig = () => ({ app: 'keyboard-bro', version: 1, lang: null, principal: null, principalMacros: false, startMinimized: true, order: [], keyboards: {} });
   let cfg = newConfig();
   let cfgPath = '';
   let saveState = 'ok';
@@ -133,11 +133,12 @@
   let saveTimer = null;
 
   function normalize(c) {
-    if (!c || typeof c !== 'object' || c.app !== 'keyboard-bro') throw new Error('ce n’est pas une configuration Keyboard Bro');
+    if (!c || typeof c !== 'object' || c.app !== 'keyboard-bro') throw new Error(tr('ce n’est pas une configuration Keyboard Bro'));
     const out = newConfig();
     out.principal = typeof c.principal === 'string' ? c.principal : null;
     out.principalMacros = !!c.principalMacros;
     out.startMinimized = c.startMinimized !== false;   // oui par défaut
+    out.lang = ['fr', 'en', 'es'].includes(c.lang) ? c.lang : null;   // null = langue de l'ordinateur
     out.order = Array.isArray(c.order) ? c.order.filter((x) => typeof x === 'string') : [];
     const layouts = KBLayouts.layoutInfo();
     if (c.keyboards && typeof c.keyboards === 'object') {
@@ -165,14 +166,14 @@
       if (invoke) {
         const r = await invoke('load_config');
         cfgPath = r.path || '';
-        if (r.recovered) banner('Le fichier de configuration était abîmé. Il a été mis de côté (' + r.recovered + ') et Keyboard Bro repart à neuf.');
+        if (r.recovered) banner(tr('Le fichier de configuration était abîmé. Il a été mis de côté (') + r.recovered + tr(') et Keyboard Bro repart à neuf.'));
         if (r.json) cfg = normalize(JSON.parse(r.json));
       } else {
         const j = localStorage.getItem('kb.config');
         if (j) cfg = normalize(JSON.parse(j));
       }
     } catch (e) {
-      banner('La configuration n’a pas pu être lue (' + e + '). Keyboard Bro repart à neuf.');
+      banner(tr('La configuration n’a pas pu être lue (') + e + tr('). Keyboard Bro repart à neuf.'));
       cfg = newConfig();
     }
   }
@@ -200,16 +201,16 @@
   function paintSave() {
     const pill = $('save-pill');
     pill.className = 'pill save ' + saveState;
-    pill.textContent = saveState === 'ok' ? '✓ Sauvegardé automatiquement' : (saveState === 'pending' ? 'Sauvegarde…' : 'Erreur de sauvegarde');
-    $('footer-right').textContent = cfgPath ? 'Config : ' + cfgPath : '';
+    pill.textContent = saveState === 'ok' ? tr('✓ Sauvegardé automatiquement') : (saveState === 'pending' ? tr('Sauvegarde…') : tr('Erreur de sauvegarde'));
+    $('footer-right').textContent = cfgPath ? tr('Config : ') + cfgPath : '';
     $('footer-right').title = cfgPath;
     const box = document.querySelector('.savebox');
     if (!box) return;
     box.className = 'savebox ' + saveState;
-    box.querySelector('.save-title').textContent = saveState === 'ok' ? 'Tout est sauvegardé' : (saveState === 'pending' ? 'Sauvegarde en cours…' : 'La sauvegarde n’a pas marché');
+    box.querySelector('.save-title').textContent = saveState === 'ok' ? tr('Tout est sauvegardé') : (saveState === 'pending' ? tr('Sauvegarde en cours…') : tr('La sauvegarde n’a pas marché'));
     box.querySelector('.save-text').textContent = saveState === 'err'
       ? saveError
-      : 'Rien à faire : chaque changement est enregistré automatiquement.' + (savedAt ? ' Dernière sauvegarde : ' + clock(savedAt) + '.' : '');
+      : tr('Rien à faire : chaque changement est enregistré automatiquement.') + (savedAt ? tr(' Dernière sauvegarde : ') + clock(savedAt) + '.' : '');
   }
 
   // =====================================================================
@@ -260,7 +261,7 @@
   /** Les touches G ont des actions différentes dans chaque banque : « M2:G1 », etc. */
   const storeId = (kb, kid) => (hasBanks(kb) && isGKey(kid) ? bankOf(kb) + ':' + kid : kid);
   function g710(cmd, kb, args) {
-    if (!invoke || !st.live) return Promise.reject(new Error('disponible dans le programme Windows seulement'));
+    if (!invoke || !st.live) return Promise.reject(new Error(tr('disponible dans le programme Windows seulement')));
     return invoke(cmd, Object.assign({ device: kb.id }, args || {}));
   }
   function syncLeds(kb) {
@@ -275,15 +276,15 @@
     pushBindings();
     changed();
     if (kb.id === st.selected) { renderCard(kb); renderSteps(); }
-    toast('Banque ' + bank + ' : les touches G1 à G6 ont maintenant les actions de ' + bank + '.');
+    toast(tr('Banque {b} : les touches G1 à G6 ont maintenant les actions de {b}.', { b: bank }));
   }
   async function separateG(kb, quiet) {
     try {
       await g710('g710_separate', kb);
-      if (!quiet) toast('C’est fait : les touches G1 à G6 ne tapent plus 1 à 6.');
+      if (!quiet) toast(tr('C’est fait : les touches G1 à G6 ne tapent plus 1 à 6.'));
       return true;
     } catch (e) {
-      if (!quiet) toast('Le G710 n’a pas accepté la commande : ' + e, true);
+      if (!quiet) toast(tr('Le G710 n’a pas accepté la commande : ') + e, true);
       return false;
     }
   }
@@ -300,13 +301,13 @@
   // Le clavier principal est toujours « Clavier 1 »; les autres suivent (2, 3…).
   const firstMacroNumber = () => (cfg.principal ? 2 : 1);
   function titleOf(kb) {
-    if (!kb) return 'Clavier';
-    if (kb.id === 'simule') return 'Simulé';
-    if (kb.virtual) return 'Virtuel';
-    if (isHiddenMouse(kb)) return 'Souris';
-    if (isPrincipal(kb)) return 'Clavier 1';
+    if (!kb) return tr('Clavier');
+    if (kb.id === 'simule') return tr('Simulé');
+    if (kb.virtual) return tr('Virtuel');
+    if (isHiddenMouse(kb)) return tr('Souris');
+    if (isPrincipal(kb)) return tr('Clavier {n}', { n: 1 });
     const i = macroKeyboards().findIndex((k) => k.id === kb.id);
-    return 'Clavier ' + (i + firstMacroNumber());
+    return tr('Clavier {n}', { n: i + firstMacroNumber() });
   }
 
   function setKeyboards(list) {
@@ -374,29 +375,29 @@
     if (!st.live) { btn.hidden = true; return; }
     const s = st.status || { blocking: true, enabled: st.macrosOn, count: 0, message: '' };
     btn.hidden = false;
-    let cls = 'on', text = 'Macros en marche';
-    if (!st.macrosOn) { cls = 'off'; text = 'Macros désactivées'; }
-    else if (!s.blocking) { cls = 'warn'; text = 'Macros en marche · sans blocage'; }
-    if (st.macrosOn && s.count) text += ' · ' + s.count + (s.count > 1 ? ' touches' : ' touche');
+    let cls = 'on', text = tr('Macros en marche');
+    if (!st.macrosOn) { cls = 'off'; text = tr('Macros désactivées'); }
+    else if (!s.blocking) { cls = 'warn'; text = tr('Macros en marche · sans blocage'); }
+    if (st.macrosOn && s.count) text += ' · ' + trn(s.count, '{n} touche', '{n} touches');
     btn.className = 'macros-btn ' + cls;
     btn.innerHTML = '<i></i><span>' + esc(text) + '</span>';
     btn.setAttribute('aria-pressed', String(!st.macrosOn));
     btn.title = st.macrosOn
-      ? 'Clique pour désactiver les macros : le clavier à macros redevient un clavier normal (F1 fait F1, etc.).'
-        + (s.blocking ? '' : '\n\nAttention : ' + (s.message || 'les touches programmées ne peuvent pas être cachées') + '. Les macros partent quand même, mais la touche fait aussi son travail normal.')
-      : 'Les macros sont désactivées : chaque touche fait son travail normal. Clique pour les rallumer.';
+      ? tr('Clique pour désactiver les macros : le clavier à macros redevient un clavier normal (F1 fait F1, etc.).')
+        + (s.blocking ? '' : tr('\n\nAttention : ') + (s.message || tr('les touches programmées ne peuvent pas être cachées')) + '. Les macros partent quand même, mais la touche fait aussi son travail normal.')
+      : tr('Les macros sont désactivées : chaque touche fait son travail normal. Clique pour les rallumer.');
     const live = document.querySelector('.live-state');
     if (live) {
       live.className = 'live-state ' + cls;
-      live.textContent = !st.macrosOn ? 'Macros désactivées (bouton en haut à droite)'
-        : 'En marche : essaie la touche dans un autre programme';
+      live.textContent = !st.macrosOn ? tr('Macros désactivées (bouton en haut à droite)')
+        : tr('En marche : essaie la touche dans un autre programme');
     }
   }
   function toggleMacros() {
     st.macrosOn = !st.macrosOn;
     pushBindings();
     paintMacros();
-    toast(st.macrosOn ? 'Macros rallumées : les touches programmées lancent leurs actions.' : 'Macros désactivées : le clavier redevient un clavier normal (F1 fait F1, etc.).');
+    toast(st.macrosOn ? tr('Macros rallumées : les touches programmées lancent leurs actions.') : tr('Macros désactivées : le clavier redevient un clavier normal (F1 fait F1, etc.).'));
   }
 
   // =====================================================================
@@ -416,7 +417,7 @@
       b.dataset.id = kb.id;
       b.style.setProperty('--c', COLORS[colorIndex(kb) % COLORS.length]);
       const lock = isPrincipal(kb) ? (cfg.principalMacros ? svg('unlock', 14) : svg('lock', 14)) : '<span class="dot"></span>';
-      b.innerHTML = lock + '<span>' + esc(titleOf(kb)) + '</span><span class="chip">· ' + esc(isPrincipal(kb) ? 'principal' : (kb.vendor || kb.name)) + '</span>';
+      b.innerHTML = lock + '<span>' + esc(titleOf(kb)) + '</span><span class="chip">· ' + esc(isPrincipal(kb) ? tr('principal') : (kb.vendor || kb.name)) + '</span>';
       b.addEventListener('click', () => select(kb.id));
       nav.append(b);
     });
@@ -425,7 +426,7 @@
     empty.className = 'tab empty-tab';
     empty.setAttribute('role', 'tab');
     empty.setAttribute('aria-selected', String(st.selected === 'empty'));
-    empty.innerHTML = '<span class="dot"></span><span>Clavier ' + (macroKeyboards().length + firstMacroNumber()) + '</span><span class="chip">· vide</span>';
+    empty.innerHTML = '<span class="dot"></span><span>' + esc(tr('Clavier {n}', { n: macroKeyboards().length + firstMacroNumber() })) + '</span><span class="chip">· ' + esc(tr('vide')) + '</span>';
     empty.addEventListener('click', () => select('empty'));
     nav.append(empty);
   }
@@ -443,32 +444,32 @@
   const board = { layout: null, kbId: null, def: null, els: [] };
 
   function renderCard(kb) {
-    $('kb-eyebrow').textContent = titleOf(kb) + (isPrincipal(kb) ? ' · principal' : '');
+    $('kb-eyebrow').textContent = titleOf(kb) + (isPrincipal(kb) ? tr(' · principal') : '');
     $('kb-name').textContent = kb.name;
     const bits = [];
     if (kb.vendor && !kb.name.includes(kb.vendor)) bits.push(kb.vendor);
     if (kb.bus) bits.push(kb.bus);
     if (kb.vid) bits.push('VID ' + kb.vid + ' · PID ' + kb.pid);
-    if (kb.interfaces > 1) bits.push(kb.interfaces + ' interfaces');
+    if (kb.interfaces > 1) bits.push(tr('{n} interfaces', { n: kb.interfaces }));
     $('kb-sub').textContent = bits.join(' · ');
 
     const role = $('role');
     if (!isReal(kb) || kb.id === 'demo') {
       role.innerHTML = '';
     } else if (isPrincipal(kb)) {
-      role.innerHTML = '<span class="chip-principal">' + svg(cfg.principalMacros ? 'unlock' : 'lock', 14) + ' Clavier principal</span>'
-        + '<span class="switch-row" title="Éteint : ce clavier est verrouillé, ses touches marchent toujours normalement. Allumé : tu peux donner des macros à certaines de ses touches.">'
-        + '<button type="button" class="switch" role="switch" aria-checked="' + cfg.principalMacros + '" aria-label="Permettre des macros sur le clavier principal" data-act="toggle-principal"><span></span></button>Macros permises</span>'
-        + '<button type="button" class="btn btn-ghost btn-sm" data-act="unset-principal">Ce n’est pas mon clavier principal</button>';
+      role.innerHTML = '<span class="chip-principal">' + svg(cfg.principalMacros ? 'unlock' : 'lock', 14) + ' ' + esc(tr('Clavier principal')) + '</span>'
+        + '<span class="switch-row" title="' + esc(tr('Éteint : ce clavier est verrouillé, ses touches marchent toujours normalement. Allumé : tu peux donner des macros à certaines de ses touches.')) + '">'
+        + '<button type="button" class="switch" role="switch" aria-checked="' + cfg.principalMacros + '" aria-label="' + esc(tr('Permettre des macros sur le clavier principal')) + '" data-act="toggle-principal"><span></span></button>' + esc(tr('Macros permises')) + '</span>'
+        + '<button type="button" class="btn btn-ghost btn-sm" data-act="unset-principal">' + esc(tr('Ce n’est pas mon clavier principal')) + '</button>';
     } else {
-      role.innerHTML = (kb.mouse ? '<button type="button" class="btn btn-ghost btn-sm" data-act="hide-mouse" title="Cet appareil est en fait une souris : le remettre de côté.">Remettre de côté (souris)</button>' : '')
-        + '<button type="button" class="btn btn-sm" data-act="set-principal">' + svg('lock', 14) + 'C’est mon clavier principal</button>';
+      role.innerHTML = (kb.mouse ? '<button type="button" class="btn btn-ghost btn-sm" data-act="hide-mouse" title="' + esc(tr('Cet appareil est en fait une souris : le remettre de côté.')) + '">' + esc(tr('Remettre de côté (souris)')) + '</button>' : '')
+        + '<button type="button" class="btn btn-sm" data-act="set-principal">' + svg('lock', 14) + esc(tr('C’est mon clavier principal')) + '</button>';
     }
 
     const bankEl = $('bank');
     if (hasBanks(kb) && macrosAllowed(kb)) {
       const cur = bankOf(kb);
-      bankEl.innerHTML = '<span title="Chaque banque donne d’autres actions aux touches G1 à G6. Les touches M1, M2, M3 du clavier changent aussi de banque.">Banque</span><div class="seg" role="group" aria-label="Banque">'
+      bankEl.innerHTML = '<span title="' + esc(tr('Chaque banque donne d’autres actions aux touches G1 à G6. Les touches M1, M2, M3 du clavier changent aussi de banque.')) + '">' + esc(tr('Banque')) + '</span><div class="seg" role="group" aria-label="' + esc(tr('Banque')) + '">'
         + BANKS.map((b) => '<button type="button" class="' + (b === cur ? 'on' : '') + '" data-bank="' + b + '" aria-pressed="' + (b === cur) + '">' + b + '</button>').join('') + '</div>';
     } else {
       bankEl.innerHTML = '';
@@ -483,20 +484,20 @@
     note.className = 'note';
     note.hidden = false;
     if (isPrincipal(kb) && !cfg.principalMacros) {
-      note.textContent = 'Clavier principal verrouillé : Keyboard Bro ne touchera jamais à ses touches.';
+      note.textContent = tr('Clavier principal verrouillé : Keyboard Bro ne touchera jamais à ses touches.');
     } else if (isPrincipal(kb)) {
       note.classList.add('warn');
-      note.textContent = 'Macros permises sur ton clavier principal : choisis des touches dont tu ne te sers pas pour écrire (F13 à F19, Pause, Défil, pavé numérique…). Une touche qui reçoit une macro ne fera plus son travail normal.';
+      note.textContent = tr('Macros permises sur ton clavier principal : choisis des touches dont tu ne te sers pas pour écrire (F13 à F19, Pause, Défil, pavé numérique…). Une touche qui reçoit une macro ne fera plus son travail normal.');
     } else if (hasBanks(kb) && !conf.separateG) {
       note.classList.add('warn');
-      note.innerHTML = '<span>' + esc('G710+ reconnu : sans le logiciel de Logitech, ses touches G1 à G6 tapent aussi 1 à 6.') + '</span>'
-        + '<button type="button" class="btn btn-sm btn-primary" data-act="g710-separate">Séparer les touches G</button>';
+      note.innerHTML = '<span>' + esc(tr('G710+ reconnu : sans le logiciel de Logitech, ses touches G1 à G6 tapent aussi 1 à 6.')) + '</span>'
+        + '<button type="button" class="btn btn-sm btn-primary" data-act="g710-separate">' + esc(tr('Séparer les touches G')) + '</button>';
     } else if (hasBanks(kb)) {
-      note.innerHTML = '<span>' + esc('G710+ : touches G séparées des chiffres. M1, M2 et M3 changent de banque (le voyant suit).') + '</span>'
-        + '<button type="button" class="btn btn-sm" data-act="g710-unseparate" title="Les touches G retaperont 1 à 6 après avoir débranché et rebranché le clavier.">Ne plus séparer</button>';
+      note.innerHTML = '<span>' + esc(tr('G710+ : touches G séparées des chiffres. M1, M2 et M3 changent de banque (le voyant suit).')) + '</span>'
+        + '<button type="button" class="btn btn-sm" data-act="g710-unseparate" title="' + esc(tr('Les touches G retaperont 1 à 6 après avoir débranché et rebranché le clavier.')) + '">' + esc(tr('Ne plus séparer')) + '</button>';
     } else if (!cfg.principal && st.keyboards.filter(isShown).length > 1) {
       note.classList.add('warn');
-      note.textContent = 'Première chose à faire : va dans l’onglet de ton clavier de tous les jours et clique « C’est mon clavier principal ».';
+      note.textContent = tr('Première chose à faire : va dans l’onglet de ton clavier de tous les jours et clique « C’est mon clavier principal ».');
     } else {
       note.hidden = true;
     }
@@ -564,7 +565,7 @@
       el.classList.toggle('gkey', isGKey(k.id));
       el.classList.toggle('down', down.has(k.id));
       el.classList.toggle('locked', !allowed);
-      el.title = k.tip + (isBankKey ? (bankOn ? ' (banque active)' : '') : entry ? ' — ' + displayName(entry) : (allowed ? ' — libre' : ''));
+      el.title = k.tip + (isBankKey ? (bankOn ? tr(' (banque active)') : '') : entry ? ' — ' + displayName(entry) : (allowed ? tr(' — libre') : ''));
     });
   }
 
@@ -573,7 +574,7 @@
     if (!d || d.classList.contains('na')) return;
     const kb = byId(st.selected);
     if (!kb) return;
-    if (!macrosAllowed(kb)) { toast('Ce clavier est verrouillé. Allume « Macros permises » pour modifier ses touches.'); return; }
+    if (!macrosAllowed(kb)) { toast(tr('Ce clavier est verrouillé. Allume « Macros permises » pour modifier ses touches.')); return; }
     if (hasBanks(kb) && BANKS.includes(d.dataset.kid)) { setBank(kb, d.dataset.kid); return; }
     setEdit(kb, d.dataset.kid);
   });
@@ -610,7 +611,7 @@
       delete kbConf(kb).separateG;
       changed();
       renderCard(kb);
-      toast('C’est noté. Débranche et rebranche le G710+ : ses touches G retaperont 1 à 6.');
+      toast(tr('C’est noté. Débranche et rebranche le G710+ : ses touches G retaperont 1 à 6.'));
     }
   });
 
@@ -639,14 +640,14 @@
 
   function detailOf(a) {
     switch (a.type) {
-      case 'prog': return (a.label || baseName(a.path)) + (a.window === 'max' ? ' (agrandie)' : a.window === 'min' ? ' (réduite)' : '');
-      case 'url': return String(a.url || '').replace(/^https?:\/\//i, '') + (a.browser && a.browser !== 'default' ? ' · ' + (a.browserName || a.browser) + (a.private ? ' (privé)' : '') : '');
+      case 'prog': return (a.label ? tr(a.label) : baseName(a.path)) + (a.window === 'max' ? tr(' (agrandie)') : a.window === 'min' ? tr(' (réduite)') : '');
+      case 'url': return String(a.url || '').replace(/^https?:\/\//i, '') + (a.browser && a.browser !== 'default' ? ' · ' + (a.browserName || a.browser) + (a.private ? tr(' (privé)') : '') : '');
       case 'text': {
         const t = String(a.text || '').replace(/\s+/g, ' ').trim();
-        return '« ' + (t.length > 40 ? t.slice(0, 40) + '…' : t) + ' »' + (a.mode === 'type' ? ' (tapé)' : '');
+        return tr('« {t} »', { t: t.length > 40 ? t.slice(0, 40) + '…' : t }) + (a.mode === 'type' ? tr(' (tapé)') : '');
       }
-      case 'combo': return (a.keys || []).join(' + ') + (a.label ? ' (' + a.label + ')' : '');
-      case 'wait': return a.kind === 'window' ? 'que « ' + (a.window || '') + ' » s’ouvre' : fmtSec((a.ms || 0) / 1000) + ' s';
+      case 'combo': return (a.keys || []).map(tr).join() + (a.label ? ' (' + tr(a.label) + ')' : '');
+      case 'wait': return a.kind === 'window' ? tr('que « {w} » s’ouvre', { w: a.window || '' }) : fmtSec((a.ms || 0) / 1000) + ' s';
       default: return '';
     }
   }
@@ -660,12 +661,12 @@
       const principal = isPrincipal(kb);
       steps.innerHTML = '<section class="card lock-panel">'
         + '<span class="ic ic-lock">' + svg('lock', 26) + '</span>'
-        + '<h2>' + (principal ? 'Ton clavier principal est verrouillé' : 'Ce clavier ne peut pas recevoir de macros') + '</h2>'
+        + '<h2>' + (principal ? tr('Ton clavier principal est verrouillé') : tr('Ce clavier ne peut pas recevoir de macros')) + '</h2>'
         + (principal
-          ? '<p>Keyboard Bro ne touchera jamais à ses touches : elles fonctionnent toujours normalement. C’est le réglage recommandé.</p>'
-            + '<p>Tu peux quand même donner des macros à quelques touches de ce clavier, par exemple F13 à F19, Pause ou le pavé numérique.</p>'
-            + '<button type="button" class="btn btn-primary" data-act="toggle-principal">' + svg('unlock', 16) + 'Permettre des macros sur ce clavier</button>'
-          : '<p>C’est un clavier virtuel (bureau à distance, clavier à l’écran…) ou des touches simulées par un logiciel.</p>')
+          ? '<p>' + esc(tr('Keyboard Bro ne touchera jamais à ses touches : elles fonctionnent toujours normalement. C’est le réglage recommandé.')) + '</p>'
+            + '<p>' + esc(tr('Tu peux quand même donner des macros à quelques touches de ce clavier, par exemple F13 à F19, Pause ou le pavé numérique.')) + '</p>'
+            + '<button type="button" class="btn btn-primary" data-act="toggle-principal">' + svg('unlock', 16) + esc(tr('Permettre des macros sur ce clavier')) + '</button>'
+          : '<p>' + esc(tr('C’est un clavier virtuel (bureau à distance, clavier à l’écran…) ou des touches simulées par un logiciel.')) + '</p>')
         + '</section>';
       return;
     }
@@ -675,58 +676,58 @@
     const sid = ek ? storeId(kb, ek) : null;
     const entry = sid ? conf.keys[sid] : null;
     const label = keyLabel(ek);
-    const bankNote = hasBanks(kb) && isGKey(ek) ? ' (banque ' + bankOf(kb) + ')' : '';
+    const bankNote = hasBanks(kb) && isGKey(ek) ? ' ' + tr('(banque {b})', { b: bankOf(kb) }) : '';
     const big = label.length > 6 ? 22 : (label.length > 3 ? 30 : 46);
     const assignedCount = Object.keys(conf.keys).length;
 
     // Étape 1
     const s1 = '<section class="card step">'
-      + '<div class="step-head"><span class="num">1</span><h2>Choisis une touche</h2></div>'
-      + '<p>Appuie sur une touche de ce clavier, ou clique-la sur le dessin.</p>'
+      + '<div class="step-head"><span class="num">1</span><h2>' + esc(tr('Choisis une touche')) + '</h2></div>'
+      + '<p>' + esc(tr('Appuie sur une touche de ce clavier, ou clique-la sur le dessin.')) + '</p>'
       + (ek
         ? '<div class="bigkey" style="font-size:' + big + 'px">' + esc(label) + '</div>'
-          + '<div class="box info"><strong>Tu modifies la touche ' + esc(label + bankNote) + '</strong>' + esc(keyTip(ek) !== label ? keyTip(ek) : '') + '</div>'
+          + '<div class="box info"><strong>' + esc(tr('Tu modifies la touche {k}', { k: label + bankNote })) + '</strong>' + esc(keyTip(ek) !== label ? keyTip(ek) : '') + '</div>'
           + (entry
-            ? '<div class="box warn">Cette touche fait déjà « ' + esc(displayName(entry)) + ' ». Tes changements remplacent l’ancienne version.</div>'
-            : '<div class="box ok">Cette touche est libre. Ajoute une action à l’étape 2 et elle deviendra bleue sur le dessin.</div>')
-        : '<div class="bigkey wait" style="font-size:40px">?</div><div class="box info"><strong>En attente d’une touche…</strong>Appuie sur la touche que tu veux programmer.</div>')
+            ? '<div class="box warn">' + esc(tr('Cette touche fait déjà « {name} ». Tes changements remplacent l’ancienne version.', { name: displayName(entry) })) + '</div>'
+            : '<div class="box ok">' + esc(tr('Cette touche est libre. Ajoute une action à l’étape 2 et elle deviendra bleue sur le dessin.')) + '</div>')
+        : '<div class="bigkey wait" style="font-size:40px">?</div><div class="box info"><strong>' + esc(tr('En attente d’une touche…')) + '</strong>' + esc(tr('Appuie sur la touche que tu veux programmer.')) + '</div>')
       + '</section>';
 
     // Étape 2
     let s2 = '<section class="card step">'
-      + '<div class="step-head"><span class="num">2</span><h2>Ce que fait la touche</h2>'
-      + (ek ? '<input id="macro-name" class="name-input" maxlength="60" placeholder="Nom de la macro (ex. Note rapide)" aria-label="Nom de la macro" value="' + esc(entry ? entry.name : '') + '">' : '')
-      + '<span class="spacer"></span>' + (st.live ? '<span class="live-state" title="Les macros ne partent pas quand Keyboard Bro est la fenêtre active : tu peux choisir et essayer tes touches ici en paix. Clique dans un autre programme (ou sur le bureau), puis appuie sur la touche."></span>' : '<span class="soon">Mode démonstration : les touches ne lancent rien</span>') + '</div>';
+      + '<div class="step-head"><span class="num">2</span><h2>' + esc(tr('Ce que fait la touche')) + '</h2>'
+      + (ek ? '<input id="macro-name" class="name-input" maxlength="60" placeholder="' + esc(tr('Nom de la macro (ex. Note rapide)')) + '" aria-label="' + esc(tr('Nom de la macro')) + '" value="' + esc(entry ? entry.name : '') + '">' : '')
+      + '<span class="spacer"></span>' + (st.live ? '<span class="live-state" title="' + esc(tr('Les macros ne partent pas quand Keyboard Bro est la fenêtre active : tu peux choisir et essayer tes touches ici en paix. Clique dans un autre programme (ou sur le bureau), puis appuie sur la touche.')) + '"></span>' : '<span class="soon">' + esc(tr('Mode démonstration : les touches ne lancent rien')) + '</span>') + '</div>';
     if (!ek) {
-      s2 += '<div class="placeholder with-mascot"><img class="mascot mascot-md" src="logo.png" alt="" width="120" height="120">Choisis d’abord une touche à l’étape 1.</div>';
+      s2 += '<div class="placeholder with-mascot"><img class="mascot mascot-md" src="logo.png" alt="" width="120" height="120">' + esc(tr('Choisis d’abord une touche à l’étape 1.')) + '</div>';
     } else {
       const actions = entry ? entry.actions : [];
       s2 += '<ol class="actions">' + actions.map((a, i) => '<li class="action">'
         + '<span class="n">' + (i + 1) + '</span>'
         + '<span class="ic ic-' + a.type + '">' + svg(a.type, 16) + '</span>'
         + '<span class="txt" title="' + esc(TYPES[a.type] + ' — ' + detailOf(a)) + '"><strong>' + esc(TYPES[a.type]) + '</strong><span> — ' + esc(detailOf(a)) + '</span></span>'
-        + '<button type="button" class="icon-btn" data-act="up" data-i="' + i + '" aria-label="Monter l’action ' + (i + 1) + '"' + (i === 0 ? ' disabled' : '') + '>' + svg('up', 15) + '</button>'
-        + '<button type="button" class="icon-btn" data-act="down" data-i="' + i + '" aria-label="Descendre l’action ' + (i + 1) + '"' + (i === actions.length - 1 ? ' disabled' : '') + '>' + svg('down', 15) + '</button>'
-        + '<button type="button" class="btn btn-sm" data-act="edit" data-i="' + i + '">Modifier</button>'
-        + '<button type="button" class="icon-btn" data-act="del" data-i="' + i + '" aria-label="Supprimer l’action ' + (i + 1) + '">' + svg('trash', 15) + '</button>'
+        + '<button type="button" class="icon-btn" data-act="up" data-i="' + i + '" aria-label="' + esc(tr('Monter l’action {n}', { n: i + 1 })) + '"' + (i === 0 ? ' disabled' : '') + '>' + svg('up', 15) + '</button>'
+        + '<button type="button" class="icon-btn" data-act="down" data-i="' + i + '" aria-label="' + esc(tr('Descendre l’action {n}', { n: i + 1 })) + '"' + (i === actions.length - 1 ? ' disabled' : '') + '>' + svg('down', 15) + '</button>'
+        + '<button type="button" class="btn btn-sm" data-act="edit" data-i="' + i + '">' + esc(tr('Modifier')) + '</button>'
+        + '<button type="button" class="icon-btn" data-act="del" data-i="' + i + '" aria-label="' + esc(tr('Supprimer l’action {n}', { n: i + 1 })) + '">' + svg('trash', 15) + '</button>'
         + '</li>').join('') + '</ol>';
-      if (!actions.length) s2 += '<div class="placeholder small">Aucune action pour l’instant. Ajoute-en une ci-dessous : elles s’exécuteront dans l’ordre.</div>';
-      s2 += '<div class="add"><span class="eyebrow">Ajouter une action</span><div class="add-grid">'
-        + ['prog', 'url', 'text', 'combo', 'wait'].map((t) => '<button type="button" class="add-btn ' + t + '" data-act="add" data-type="' + t + '"><span class="ico">' + svg(t, 17) + '</span>' + ({ prog: 'Fichier ou programme', url: 'Ouvrir une URL', text: 'Coller du texte', combo: 'Combinaison de touches', wait: 'Attendre' })[t] + '</button>').join('')
-        + '<button type="button" class="add-btn script" disabled title="Bientôt : importer un script AutoHotkey et le convertir en profil"><span class="ico">' + svg('upload', 17) + '</span><span class="two">Importer un script AHK<small>bientôt · converti en profil</small></span></button>'
+      if (!actions.length) s2 += '<div class="placeholder small">' + esc(tr('Aucune action pour l’instant. Ajoute-en une ci-dessous : elles s’exécuteront dans l’ordre.')) + '</div>';
+      s2 += '<div class="add"><span class="eyebrow">' + esc(tr('Ajouter une action')) + '</span><div class="add-grid">'
+        + ['prog', 'url', 'text', 'combo', 'wait'].map((t) => '<button type="button" class="add-btn ' + t + '" data-act="add" data-type="' + t + '"><span class="ico">' + svg(t, 17) + '</span>' + ({ prog: tr('Fichier ou programme'), url: tr('Ouvrir une URL'), text: tr('Coller du texte'), combo: tr('Combinaison de touches'), wait: tr('Attendre') })[t] + '</button>').join('')
+        + '<button type="button" class="add-btn script" disabled title="' + esc(tr('Bientôt : importer un script AutoHotkey et le convertir en profil')) + '"><span class="ico">' + svg('upload', 17) + '</span><span class="two">' + esc(tr('Importer un script AHK')) + '<small>' + esc(tr('bientôt · converti en profil')) + '</small></span></button>'
         + '</div></div>';
     }
     s2 += '</section>';
 
     // Étape 3
     const s3 = '<section class="card step">'
-      + '<div class="step-head"><span class="num">3</span><h2>Sauvegarde</h2></div>'
+      + '<div class="step-head"><span class="num">3</span><h2>' + esc(tr('Sauvegarde')) + '</h2></div>'
       + '<div class="savebox"><span class="bubble">' + svg('check', 18, 2.6) + '</span><div><strong class="save-title"></strong><span class="save-text"></span></div></div>'
-      + '<div class="stat">' + assignedCount + (assignedCount > 1 ? ' touches assignées' : ' touche assignée') + ' sur ce clavier</div>'
+      + '<div class="stat">' + esc(trn(assignedCount, '{n} touche assignée sur ce clavier', '{n} touches assignées sur ce clavier')) + '</div>'
       + '<div class="stack push">'
-      + (entry ? '<button type="button" class="btn btn-danger" data-act="clear-key">' + svg('trash', 15) + 'Effacer la touche ' + esc(label) + '</button>' : '')
-      + '<button type="button" class="btn" data-act="export">' + svg('download', 15) + 'Exporter une copie…</button>'
-      + '<button type="button" class="btn" data-act="import">' + svg('upload', 15) + 'Importer une configuration…</button>'
+      + (entry ? '<button type="button" class="btn btn-danger" data-act="clear-key">' + svg('trash', 15) + esc(tr('Effacer la touche {k}', { k: label })) + '</button>' : '')
+      + '<button type="button" class="btn" data-act="export">' + svg('download', 15) + esc(tr('Exporter une copie…')) + '</button>'
+      + '<button type="button" class="btn" data-act="import">' + svg('upload', 15) + esc(tr('Importer une configuration…')) + '</button>'
       + '</div></section>';
 
     steps.innerHTML = s1 + s2 + s3;
@@ -782,7 +783,7 @@
     } else if (act === 'down' && entry && i < entry.actions.length - 1) {
       [entry.actions[i + 1], entry.actions[i]] = [entry.actions[i], entry.actions[i + 1]]; save();
     } else if (act === 'clear-key' && entry) {
-      confirmBox('Effacer la touche ' + keyLabel(ek) + ' ?', 'Ses ' + entry.actions.length + ' action(s) seront supprimées et la touche redeviendra libre.', 'Effacer', () => {
+      confirmBox(tr('Effacer la touche {k} ?', { k: keyLabel(ek) }), trn(entry.actions.length, 'Son action sera supprimée et la touche redeviendra libre.', 'Ses {n} actions seront supprimées et la touche redeviendra libre.'), tr('Effacer'), () => {
         delete conf.keys[sid]; changed(); paintBoard(); renderSteps();
       });
     }
@@ -808,9 +809,9 @@
     const box = $('set-aside');
     const mice = st.keyboards.filter((k) => isReal(k) && isHiddenMouse(k));
     if (!mice.length) { box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="eyebrow">Mis de côté</div>' + mice.map((k) => '<div class="aside-row">'
-      + '<span class="grow"><strong>' + esc(k.name) + '</strong><small>Partie « clavier » d’une souris' + (k.vid ? ' · ' + esc(k.vid + ':' + k.pid) : '') + '</small></span>'
-      + '<button type="button" class="btn btn-sm" data-use="' + esc(k.id) + '">L’utiliser comme clavier</button></div>').join('');
+    box.innerHTML = '<div class="eyebrow">' + esc(tr('Mis de côté')) + '</div>' + mice.map((k) => '<div class="aside-row">'
+      + '<span class="grow"><strong>' + esc(k.name) + '</strong><small>' + esc(tr('Partie « clavier » d’une souris')) + (k.vid ? ' · ' + esc(k.vid + ':' + k.pid) : '') + '</small></span>'
+      + '<button type="button" class="btn btn-sm" data-use="' + esc(k.id) + '">' + esc(tr('L’utiliser comme clavier')) + '</button></div>').join('');
   }
   $('set-aside').addEventListener('click', (e) => {
     const b = e.target.closest('[data-use]');
@@ -823,14 +824,14 @@
 
   $('detect').addEventListener('click', async () => {
     const msg = $('detect-msg');
-    msg.textContent = 'Recherche…';
+    msg.textContent = tr('Recherche…');
     const before = new Set(macroKeyboards().map((k) => k.id));
     if (invoke && st.live) {
-      try { setKeyboards(await invoke('list_keyboards')); } catch (e) { msg.textContent = 'Erreur : ' + e; return; }
+      try { setKeyboards(await invoke('list_keyboards')); } catch (e) { msg.textContent = tr('Erreur : ') + e; return; }
     }
     const fresh = macroKeyboards().find((k) => !before.has(k.id));
-    if (fresh) { select(fresh.id); toast('Nouveau clavier trouvé : ' + fresh.name); return; }
-    $('detect-msg').textContent = 'Aucun nouveau clavier trouvé. Vérifie qu’il est bien branché (ou allumé, s’il est Bluetooth), puis appuie sur une de ses touches.';
+    if (fresh) { select(fresh.id); toast(tr('Nouveau clavier trouvé : ') + fresh.name); return; }
+    $('detect-msg').textContent = tr('Aucun nouveau clavier trouvé. Vérifie qu’il est bien branché (ou allumé, s’il est Bluetooth), puis appuie sur une de ses touches.');
   });
 
   // =====================================================================
@@ -839,8 +840,8 @@
   function logEmpty() {
     const log = $('log');
     log.innerHTML = '<div class="empty">' + (st.live
-      ? 'Appuie sur une touche de n’importe quel clavier : elle apparaît ici avec le nom du clavier et ses codes.'
-      : 'Mode démonstration : tape dans cette fenêtre pour voir les touches.') + '</div>';
+      ? tr('Appuie sur une touche de n’importe quel clavier : elle apparaît ici avec le nom du clavier et ses codes.')
+      : tr('Mode démonstration : tape dans cette fenêtre pour voir les touches.')) + '</div>';
     st.lineCount = 0;
   }
   function logKey(ev, kid) {
@@ -854,8 +855,8 @@
     const line = frag('<div class="line' + (ev.down ? '' : ' up') + '"><span class="t">' + clock(new Date()) + '</span>'
       + '<span class="tag" style="--c:' + color + '">' + esc(titleOf(kb)) + '</span>'
       + '<span class="k">' + esc(keyLabel(kid)) + '</span><span>' + (ev.down ? '↓' : '↑') + '</span>'
-      + (ev.fired ? '<span class="' + (ev.skipped ? 'skip' : 'fire') + '" title="' + esc(ev.skipped ? 'Pas lancée : ' + ev.skipped : 'Macro lancée') + '">→ ' + esc(ev.fired) + (ev.skipped ? ' (pas lancée)' : '') + '</span>' : '')
-      + (ev.blocked && !ev.fired && ev.down ? '<span class="hid" title="Touche programmée : cachée aux autres programmes">cachée</span>' : '')
+      + (ev.fired ? '<span class="' + (ev.skipped ? 'skip' : 'fire') + '" title="' + esc(ev.skipped ? tr('Pas lancée : ') + ev.skipped : tr('Macro lancée')) + '">→ ' + esc(ev.fired) + (ev.skipped ? tr(' (pas lancée)') : '') + '</span>' : '')
+      + (ev.blocked && !ev.fired && ev.down ? '<span class="hid" title="' + esc(tr('Touche programmée : cachée aux autres programmes')) + '">' + esc(tr('cachée')) + '</span>' : '')
       + '<span class="codes" title="' + esc(codes) + '">' + esc(codes) + '</span></div>');
     log.append(line);
     st.lineCount++;
@@ -864,7 +865,7 @@
   }
   $('pause').addEventListener('click', () => {
     st.paused = !st.paused;
-    $('pause').textContent = st.paused ? 'Reprendre' : 'Pause';
+    $('pause').textContent = st.paused ? tr('Reprendre') : 'Pause';
     $('term-title').classList.toggle('paused', st.paused);
   });
   $('clear').addEventListener('click', logEmpty);
@@ -876,7 +877,7 @@
   // =====================================================================
   function onKey(ev, kid) {
     if (ev.device === 'simule' && !byId('simule')) {
-      st.keyboards.push({ id: 'simule', name: 'Touches simulées par un logiciel', vendor: '', vid: '', pid: '', interfaces: 1, virtual: true, bus: '' });
+      st.keyboards.push({ id: 'simule', name: tr('Touches simulées par un logiciel'), vendor: '', vid: '', pid: '', interfaces: 1, virtual: true, bus: '' });
     }
     const down = st.down[ev.device] || (st.down[ev.device] = new Set());
     const repeat = ev.down && kid && down.has(kid);
@@ -884,7 +885,7 @@
     if (!repeat) logKey(ev, kid);
     if (ev.down && ev.fired && ev.skipped && Date.now() - (st.skipToast || 0) > 6000) {
       st.skipToast = Date.now();
-      toast('« ' + ev.fired + ' » n’est pas lancée quand Keyboard Bro est la fenêtre active. Clique dans un autre programme (ex. le bureau), puis appuie sur la touche.');
+      toast(tr('« {name} » n’est pas lancée quand Keyboard Bro est la fenêtre active. Clique dans un autre programme (ex. le bureau), puis appuie sur la touche.', { name: ev.fired }));
     }
 
     const kb = byId(ev.device);
@@ -905,7 +906,7 @@
         if (board.els.some((x) => x.k.id === kid && !x.k.na)) {
           if (st.edit[kb.id] !== kid) setEdit(kb, kid);
         } else {
-          $('layout-hint').textContent = '« ' + keyLabel(kid) + ' » n’est pas sur ce dessin : essaie une autre disposition.';
+          $('layout-hint').textContent = tr('« {k} » n’est pas sur ce dessin : essaie une autre disposition.', { k: keyLabel(kid) });
         }
       }
     }
@@ -929,11 +930,11 @@
     const wrap = frag('<div class="overlay"><div class="dialog' + (o.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="dlg-title">'
       + '<div class="dlg-head"><span class="ic ic-' + o.kind + '">' + svg(o.icon || o.kind, 19) + '</span>'
       + '<div class="dlg-titles"><h2 id="dlg-title">' + esc(o.title) + '</h2><div class="muted">' + esc(o.sub || '') + '</div></div>'
-      + '<button type="button" class="icon-btn" data-x aria-label="Fermer">' + svg('x', 16) + '</button></div>'
+      + '<button type="button" class="icon-btn" data-x aria-label="' + esc(tr('Fermer')) + '">' + svg('x', 16) + '</button></div>'
       + '<div class="dlg-body"></div>'
       + '<div class="dlg-foot"><span class="dlg-msg muted"></span><span class="spacer"></span>'
-      + (o.noCancel ? '' : '<button type="button" class="btn" data-x>Annuler</button>')
-      + '<button type="button" class="btn ' + (o.danger ? 'btn-danger' : 'btn-primary') + '" data-ok>' + esc(o.okText || 'Ajouter à la suite') + '</button></div></div></div>');
+      + (o.noCancel ? '' : '<button type="button" class="btn" data-x>' + esc(tr('Annuler')) + '</button>')
+      + '<button type="button" class="btn ' + (o.danger ? 'btn-danger' : 'btn-primary') + '" data-ok>' + esc(o.okText || tr('Ajouter à la suite')) + '</button></div></div></div>');
     wrap.querySelector('.dlg-body').append(o.body);
     const api = {
       el: wrap,
@@ -958,32 +959,32 @@
   }
 
   async function pickFile(filters) {
-    if (!invoke) { toast('Disponible dans le programme seulement.'); return null; }
+    if (!invoke) { toast(tr('Disponible dans le programme seulement.')); return null; }
     try {
       const r = await invoke('plugin:dialog|open', { options: { multiple: false, directory: false, filters } });
       return typeof r === 'string' ? r : (r && r.path) || null;
-    } catch (e) { toast('Impossible d’ouvrir l’explorateur : ' + e, true); return null; }
+    } catch (e) { toast(tr('Impossible d’ouvrir l’explorateur : ') + e, true); return null; }
   }
 
   function openAction(type, existing, done) {
     ({ prog: dlgProg, url: dlgUrl, text: dlgText, combo: dlgCombo, wait: dlgWait })[type](existing, done);
   }
-  const okLabel = (existing) => (existing ? 'Enregistrer' : 'Ajouter à la suite');
+  const okLabel = (existing) => (existing ? tr('Enregistrer') : tr('Ajouter à la suite'));
 
   // ---------- Fichier ou programme ----------
   const APPS = [['Bloc-notes', 'notepad.exe'], ['Calculatrice', 'calc.exe'], ['Paint', 'mspaint.exe'], ['Explorateur', 'explorer.exe'], ['Terminal', 'wt.exe'], ['Gestionnaire des tâches', 'taskmgr.exe']];
   function dlgProg(a, done) {
     const s = { path: a ? a.path : 'notepad.exe', label: a ? a.label : 'Bloc-notes', window: a ? (a.window || 'normal') : 'normal' };
     const body = frag('<div class="dlg-body" style="padding:0">'
-      + '<button type="button" class="browse" data-browse><span class="ic">' + svg('search', 20) + '</span><span><strong>Parcourir l’ordinateur…</strong><span>Ouvre l’explorateur pour choisir un programme, un fichier ou un raccourci.</span></span></button>'
-      + '<div><div class="eyebrow" style="margin-bottom:8px">Programmes courants</div><div class="grid3" data-apps></div></div>'
-      + '<label class="field-col">Chemin<input type="text" class="input mono" data-path spellcheck="false"></label>'
-      + '<div><div class="label">Taille de la fenêtre au lancement</div><div class="seg" data-seg></div></div></div>');
+      + '<button type="button" class="browse" data-browse><span class="ic">' + svg('search', 20) + '</span><span><strong>' + esc(tr('Parcourir l’ordinateur…')) + '</strong><span>' + esc(tr('Ouvre l’explorateur pour choisir un programme, un fichier ou un raccourci.')) + '</span></span></button>'
+      + '<div><div class="eyebrow" style="margin-bottom:8px">' + esc(tr('Programmes courants')) + '</div><div class="grid3" data-apps></div></div>'
+      + '<label class="field-col">' + esc(tr('Chemin')) + '<input type="text" class="input mono" data-path spellcheck="false"></label>'
+      + '<div><div class="label">' + esc(tr('Taille de la fenêtre au lancement')) + '</div><div class="seg" data-seg></div></div></div>');
     const appsEl = body.querySelector('[data-apps]'), pathEl = body.querySelector('[data-path]'), segEl = body.querySelector('[data-seg]');
     const paint = () => {
-      appsEl.innerHTML = APPS.map(([n, e]) => '<button type="button" class="choice' + (s.path.toLowerCase() === e ? ' on' : '') + '" data-exe="' + e + '" data-name="' + esc(n) + '"><strong>' + esc(n) + '</strong><span class="mono">' + e + '</span></button>').join('');
+      appsEl.innerHTML = APPS.map(([n, e]) => '<button type="button" class="choice' + (s.path.toLowerCase() === e ? ' on' : '') + '" data-exe="' + e + '" data-name="' + esc(n) + '"><strong>' + esc(tr(n)) + '</strong><span class="mono">' + e + '</span></button>').join('');
       pathEl.value = s.path;
-      segEl.innerHTML = [['normal', 'Normale'], ['max', 'Agrandie'], ['min', 'Réduite']].map(([v, l]) => '<button type="button" class="' + (s.window === v ? 'on' : '') + '" data-win="' + v + '">' + l + '</button>').join('');
+      segEl.innerHTML = [['normal', tr('Normale')], ['max', tr('Agrandie')], ['min', tr('Réduite')]].map(([v, l]) => '<button type="button" class="' + (s.window === v ? 'on' : '') + '" data-win="' + v + '">' + l + '</button>').join('');
     };
     paint();
     appsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-exe]'); if (!b) return; s.path = b.dataset.exe; s.label = b.dataset.name; paint(); });
@@ -995,13 +996,13 @@
       appsEl.querySelectorAll('[data-exe]').forEach((b) => b.classList.toggle('on', b.dataset.exe === s.path.toLowerCase()));
     });
     body.querySelector('[data-browse]').addEventListener('click', async () => {
-      const p = await pickFile([{ name: 'Programmes et raccourcis', extensions: ['exe', 'lnk', 'bat', 'cmd', 'app'] }, { name: 'Tous les fichiers', extensions: ['*'] }]);
+      const p = await pickFile([{ name: tr('Programmes et raccourcis'), extensions: ['exe', 'lnk', 'bat', 'cmd', 'app'] }, { name: tr('Tous les fichiers'), extensions: ['*'] }]);
       if (p) { s.path = p; s.label = ''; paint(); }
     });
     openModal({
-      kind: 'prog', title: 'Ouvrir un fichier ou un programme', sub: 'Choisis un programme courant ou n’importe quel fichier de ton ordinateur.', body, okText: okLabel(a),
+      kind: 'prog', title: tr('Ouvrir un fichier ou un programme'), sub: tr('Choisis un programme courant ou n’importe quel fichier de ton ordinateur.'), body, okText: okLabel(a),
       onOk: (m) => {
-        if (!s.path) { m.msg('Choisis un programme ou un fichier.', true); return false; }
+        if (!s.path) { m.msg(tr('Choisis un programme ou un fichier.'), true); return false; }
         done({ type: 'prog', path: s.path, label: s.label || baseName(s.path), window: s.window });
       }
     });
@@ -1011,23 +1012,23 @@
   function dlgUrl(a, done) {
     const s = { url: a ? a.url : 'https://', browser: a ? (a.browser || 'default') : 'default', priv: a ? !!a.private : false, list: [], custom: a && a.browser === 'custom' ? a.browserPath : '' };
     const body = frag('<div class="dlg-body" style="padding:0">'
-      + '<label class="field-col">Adresse (URL)<input type="text" class="input big" data-url data-autofocus spellcheck="false" placeholder="https://"></label>'
-      + '<div><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px"><span class="eyebrow">Avec quel navigateur ?</span><span class="muted small">Trouvés automatiquement sur cet ordinateur</span></div><div class="rows" data-list></div>'
-      + '<button type="button" class="linkish" data-other>Ton navigateur n’est pas là ? Le choisir dans l’ordinateur…</button></div>'
-      + '<label class="checkline" data-privline><input type="checkbox" data-priv> <span>Ouvrir en navigation privée <span class="muted small" data-privhint></span></span></label></div>');
+      + '<label class="field-col">' + esc(tr('Adresse (URL)')) + '<input type="text" class="input big" data-url data-autofocus spellcheck="false" placeholder="' + esc(tr('https://')) + '"></label>'
+      + '<div><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px"><span class="eyebrow">' + esc(tr('Avec quel navigateur ?')) + '</span><span class="muted small">' + esc(tr('Trouvés automatiquement sur cet ordinateur')) + '</span></div><div class="rows" data-list></div>'
+      + '<button type="button" class="linkish" data-other>' + esc(tr('Ton navigateur n’est pas là ? Le choisir dans l’ordinateur…')) + '</button></div>'
+      + '<label class="checkline" data-privline><input type="checkbox" data-priv> <span>' + esc(tr('Ouvrir en navigation privée')) + ' <span class="muted small" data-privhint></span></span></label></div>');
     const urlEl = body.querySelector('[data-url]'), listEl = body.querySelector('[data-list]'), privEl = body.querySelector('[data-priv]');
     urlEl.value = s.url;
     const paint = () => {
-      const rows = [{ id: 'default', name: 'Navigateur par défaut', path: 'Celui que l’ordinateur utilise déjà', installed: true }].concat(s.list);
-      if (s.custom) rows.push({ id: 'custom', name: baseName(s.custom) || 'Autre navigateur', path: s.custom, installed: true });
+      const rows = [{ id: 'default', name: tr('Navigateur par défaut'), path: tr('Celui que l’ordinateur utilise déjà'), installed: true }].concat(s.list);
+      if (s.custom) rows.push({ id: 'custom', name: baseName(s.custom) || tr('Autre navigateur'), path: s.custom, installed: true });
       listEl.innerHTML = rows.map((b) => '<button type="button" class="row-choice' + (b.id === s.browser ? ' on' : '') + '" data-id="' + esc(b.id) + '"' + (b.installed ? '' : ' disabled') + '>'
         + '<span class="radio"></span><span class="grow"><strong>' + esc(b.name) + '</strong><span class="mono">' + esc(b.path) + '</span></span>'
-        + (b.id === 'default' ? '<span class="badge ok">Recommandé</span>' : (b.installed ? '<span class="badge in">Installé</span>' : '<span class="badge no">Pas trouvé</span>'))
+        + (b.id === 'default' ? '<span class="badge ok">' + esc(tr('Recommandé')) + '</span>' : (b.installed ? '<span class="badge in">' + esc(tr('Installé')) + '</span>' : '<span class="badge no">' + esc(tr('Pas trouvé')) + '</span>'))
         + '</button>').join('');
       const def = s.browser === 'default';
       privEl.disabled = def;
       privEl.checked = s.priv && !def;
-      body.querySelector('[data-privhint]').textContent = def ? '(choisis un navigateur précis pour cette option)' : '';
+      body.querySelector('[data-privhint]').textContent = def ? tr('(choisis un navigateur précis pour cette option)') : '';
     };
     paint();
     if (invoke) invoke('list_browsers').then((list) => { s.list = list || []; paint(); }).catch(() => {});
@@ -1035,17 +1036,17 @@
     privEl.addEventListener('change', () => { s.priv = privEl.checked; });
     urlEl.addEventListener('input', () => { s.url = urlEl.value; });
     body.querySelector('[data-other]').addEventListener('click', async () => {
-      const p = await pickFile([{ name: 'Programmes', extensions: ['exe', 'app'] }]);
+      const p = await pickFile([{ name: tr('Programmes'), extensions: ['exe', 'app'] }]);
       if (p) { s.custom = p; s.browser = 'custom'; paint(); }
     });
     openModal({
-      kind: 'url', title: 'Ouvrir une URL', sub: 'Colle l’adresse du site et choisis le navigateur.', body, okText: okLabel(a),
+      kind: 'url', title: tr('Ouvrir une URL'), sub: tr('Colle l’adresse du site et choisis le navigateur.'), body, okText: okLabel(a),
       onOk: (m) => {
         let u = s.url.trim();
         if (u && !/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
         let ok = false;
         try { const p = new URL(u); ok = (p.protocol === 'http:' || p.protocol === 'https:') && (p.hostname.includes('.') || p.hostname === 'localhost'); } catch { ok = false; }
-        if (!ok) { m.msg('Cette adresse ne semble pas valide (ex. meteo.gc.ca ou https://www.google.com).', true); return false; }
+        if (!ok) { m.msg(tr('Cette adresse ne semble pas valide (ex. meteo.gc.ca ou https://www.google.com).'), true); return false; }
         const chosen = s.browser === 'custom' ? { name: baseName(s.custom), path: s.custom } : s.list.find((b) => b.id === s.browser);
         done({
           type: 'url', url: u, browser: s.browser,
@@ -1061,24 +1062,35 @@
   function dlgText(a, done) {
     const s = { text: a ? a.text : '', mode: a ? (a.mode || 'paste') : 'paste' };
     const body = frag('<div class="dlg-body" style="padding:0">'
-      + '<label class="field-col">Texte<textarea class="input" rows="5" data-text data-autofocus placeholder="Écris ou colle ton texte ici…"></textarea></label>'
-      + '<div><div class="label">Insérer une valeur automatique</div><div class="chips" data-vars></div></div>'
-      + '<div><div class="eyebrow" style="margin-bottom:6px">Aperçu</div><div class="preview" data-prev></div></div>'
-      + '<div><div class="label">Façon d’insérer</div><div class="rows" data-modes></div></div></div>');
+      + '<label class="field-col">' + esc(tr('Texte')) + '<textarea class="input" rows="5" data-text data-autofocus placeholder="' + esc(tr('Écris ou colle ton texte ici…')) + '"></textarea></label>'
+      + '<div><div class="label">' + esc(tr('Insérer une valeur automatique')) + '</div><div class="chips" data-vars></div></div>'
+      + '<div><div class="eyebrow" style="margin-bottom:6px">' + esc(tr('Aperçu')) + '</div><div class="preview" data-prev></div></div>'
+      + '<div><div class="label">' + esc(tr('Façon d’insérer')) + '</div><div class="rows" data-modes></div></div></div>');
     const ta = body.querySelector('[data-text]'), prev = body.querySelector('[data-prev]'), modes = body.querySelector('[data-modes]');
     ta.value = s.text;
-    const VARS = [['{date}', 'date du jour'], ['{heure}', 'heure'], ['{presse-papiers}', 'ce que tu as copié'], ['{curseur}', 'place du curseur']];
-    body.querySelector('[data-vars]').innerHTML = VARS.map(([t, l]) => '<button type="button" class="chipbtn" data-var="' + t + '"><span class="mono">' + t + '</span>' + l + '</button>').join('');
+    // Valeurs automatiques : un nom par langue, mais tous les noms marchent partout
+    // (une macro écrite avec {heure} marche aussi en anglais, et {time} en français).
+    const VARS = {
+      fr: [['{date}', 'date du jour'], ['{heure}', 'heure'], ['{presse-papiers}', 'ce que tu as copié'], ['{curseur}', 'place du curseur']],
+      en: [['{date}', 'today’s date'], ['{time}', 'time'], ['{clipboard}', 'what you copied'], ['{cursor}', 'cursor position']],
+      es: [['{fecha}', 'fecha de hoy'], ['{hora}', 'hora'], ['{portapapeles}', 'lo que copiaste'], ['{cursor}', 'posición del cursor']]
+    }[KBI18n.lang];
+    const ALIASES = { date: ['{date}', '{fecha}'], time: ['{heure}', '{time}', '{hora}'], clip: ['{presse-papiers}', '{clipboard}', '{portapapeles}'], cursor: ['{curseur}', '{cursor}'] };
+    body.querySelector('[data-vars]').innerHTML = VARS.map(([t, l]) => '<button type="button" class="chipbtn" data-var="' + t + '"><span class="mono">' + t + '</span>' + esc(l) + '</button>').join('');
+    const swap = (text, names, value) => names.reduce((acc, n) => acc.split(n).join(value), text);
     const paintPrev = () => {
       const now = new Date();
-      prev.textContent = (s.text || '…')
-        .split('{date}').join(now.toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }))
-        .split('{heure}').join(two(now.getHours()) + ' h ' + two(now.getMinutes()))
-        .split('{presse-papiers}').join('[ce que tu as copié]')
-        .split('{curseur}').join('|');
+      const time = KBI18n.lang === 'fr' ? two(now.getHours()) + ' h ' + two(now.getMinutes())
+        : KBI18n.lang === 'es' ? two(now.getHours()) + ':' + two(now.getMinutes())
+          : now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      let out = s.text || '…';
+      out = swap(out, ALIASES.date, now.toLocaleDateString(KBI18n.lang === 'en' ? 'en-US' : KBI18n.locale(), { day: 'numeric', month: 'long', year: 'numeric' }));
+      out = swap(out, ALIASES.time, time);
+      out = swap(out, ALIASES.clip, tr('[ce que tu as copié]'));
+      prev.textContent = swap(out, ALIASES.cursor, '|');
     };
     const paintModes = () => {
-      modes.innerHTML = [['paste', 'Coller d’un coup', 'Instantané. Recommandé dans presque tous les logiciels.'], ['type', 'Taper lettre par lettre', 'Plus lent, pour les logiciels qui bloquent le collage.']]
+      modes.innerHTML = [['paste', tr('Coller d’un coup'), tr('Instantané. Recommandé dans presque tous les logiciels.')], ['type', tr('Taper lettre par lettre'), tr('Plus lent, pour les logiciels qui bloquent le collage.')]]
         .map(([v, t, h]) => '<button type="button" class="row-choice' + (s.mode === v ? ' on' : '') + '" data-mode="' + v + '"><span class="radio"></span><span class="grow"><strong>' + t + '</strong><small>' + h + '</small></span></button>').join('');
     };
     paintPrev(); paintModes();
@@ -1093,25 +1105,25 @@
     });
     modes.addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (!b) return; s.mode = b.dataset.mode; paintModes(); });
     const m = openModal({
-      kind: 'text', title: 'Coller du texte', sub: 'Le texte sera inséré là où se trouve ton curseur.', body, okText: okLabel(a),
+      kind: 'text', title: tr('Coller du texte'), sub: tr('Le texte sera inséré là où se trouve ton curseur.'), body, okText: okLabel(a),
       onOk: (api) => {
-        if (!s.text.trim()) { api.msg('Écris le texte à coller.', true); return false; }
+        if (!s.text.trim()) { api.msg(tr('Écris le texte à coller.'), true); return false; }
         done({ type: 'text', text: s.text, mode: s.mode });
       }
     });
-    m.msg('Ton presse-papiers est remis comme avant après le collage.');
+    m.msg(tr('Ton presse-papiers est remis comme avant après le collage.'));
   }
 
   // ---------- Attendre ----------
   function dlgWait(a, done) {
-    const s = { kind: a ? (a.kind || 'time') : 'time', sec: a && a.ms ? a.ms / 1000 : 0.5, win: a && a.window ? a.window : 'Bloc-notes' };
+    const s = { kind: a ? (a.kind || 'time') : 'time', sec: a && a.ms ? a.ms / 1000 : 0.5, win: a && a.window ? a.window : tr('Bloc-notes') };
     const body = frag('<div class="dlg-body" style="padding:0">'
-      + '<div class="seg" data-tabs><button type="button" data-k="time">Un temps fixe</button><button type="button" data-k="window">Qu’une fenêtre s’ouvre</button></div>'
+      + '<div class="seg" data-tabs><button type="button" data-k="time">' + esc(tr('Un temps fixe')) + '</button><button type="button" data-k="window">' + esc(tr('Qu’une fenêtre s’ouvre')) + '</button></div>'
       + '<div data-time><div class="bignum"><b data-num></b><span data-unit></span></div>'
-      + '<input type="range" min="0.1" max="10" step="0.1" aria-label="Durée en secondes" data-range><div class="scale"><span>0,1 s</span><span>10 s</span></div>'
+      + '<input type="range" min="0.1" max="10" step="0.1" aria-label="' + esc(tr('Durée en secondes')) + '" data-range><div class="scale"><span>' + fmtSec(0.1) + ' s</span><span>10 s</span></div>'
       + '<div class="chips" style="justify-content:center;margin-top:12px" data-presets></div></div>'
-      + '<div data-win class="dlg-body" style="padding:0"><label class="field-col">Nom de la fenêtre à attendre<input type="text" class="input big" data-winname placeholder="ex. Bloc-notes"></label>'
-      + '<div class="box info">On passe à l’action suivante dès que cette fenêtre apparaît, ou après 10 secondes au maximum. Plus fiable qu’un temps fixe : un ordinateur lent ne brise pas la macro.</div></div></div>');
+      + '<div data-win class="dlg-body" style="padding:0"><label class="field-col">' + esc(tr('Nom de la fenêtre à attendre')) + '<input type="text" class="input big" data-winname placeholder="' + esc(tr('ex. Bloc-notes')) + '"></label>'
+      + '<div class="box info">' + esc(tr('On passe à l’action suivante dès que cette fenêtre apparaît, ou après 10 secondes au maximum. Plus fiable qu’un temps fixe : un ordinateur lent ne brise pas la macro.')) + '</div></div></div>');
     const range = body.querySelector('[data-range]'), nameEl = body.querySelector('[data-winname]');
     range.value = String(s.sec);
     nameEl.value = s.win;
@@ -1120,7 +1132,7 @@
       body.querySelector('[data-time]').hidden = s.kind !== 'time';
       body.querySelector('[data-win]').hidden = s.kind !== 'window';
       body.querySelector('[data-num]').textContent = fmtSec(s.sec);
-      body.querySelector('[data-unit]').textContent = s.sec >= 2 ? 'secondes' : 'seconde';
+      body.querySelector('[data-unit]').textContent = s.sec >= 2 || (KBI18n.lang !== 'fr' && s.sec !== 1) ? tr('secondes') : tr('seconde');
       body.querySelector('[data-presets]').innerHTML = [0.1, 0.5, 1, 2, 5].map((v) => '<button type="button" class="chipbtn' + (Math.abs(v - s.sec) < 0.01 ? ' on' : '') + '" data-v="' + v + '">' + fmtSec(v) + ' s</button>').join('');
     };
     paint();
@@ -1129,10 +1141,10 @@
     body.querySelector('[data-presets]').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (!b) return; s.sec = parseFloat(b.dataset.v); range.value = String(s.sec); paint(); });
     nameEl.addEventListener('input', () => { s.win = nameEl.value; });
     openModal({
-      kind: 'wait', title: 'Attendre', sub: 'Laisse le temps à un programme de s’ouvrir avant l’action suivante.', body, okText: okLabel(a),
+      kind: 'wait', title: tr('Attendre'), sub: tr('Laisse le temps à un programme de s’ouvrir avant l’action suivante.'), body, okText: okLabel(a),
       onOk: (m) => {
         if (s.kind === 'window') {
-          if (!s.win.trim()) { m.msg('Écris le nom de la fenêtre à attendre.', true); return false; }
+          if (!s.win.trim()) { m.msg(tr('Écris le nom de la fenêtre à attendre.'), true); return false; }
           done({ type: 'wait', kind: 'window', window: s.win.trim() });
         } else {
           done({ type: 'wait', kind: 'time', ms: Math.round(s.sec * 1000) });
@@ -1147,36 +1159,38 @@
     const data = KBShortcuts.shortcuts();
     const s = { keys: a ? (a.keys || []).slice() : ['Ctrl', 'S'], label: a ? (a.label || '') : 'Enregistrer', query: '', cat: 'all', listening: false, partial: [] };
     const body = frag('<div class="dlg-body" style="padding:0">'
-      + '<div><div class="label">Combinaison choisie — clique dans la case, puis fais la combinaison sur ton clavier</div><button type="button" class="capture" data-capture data-autofocus></button></div>'
-      + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="muted small">Ou choisis parmi les raccourcis de Windows</span><span class="muted small" data-count></span></div>'
-      + '<div class="search">' + svg('search', 18) + '<input type="text" data-q placeholder="Rechercher : capture, bureau, onglet, volume…" aria-label="Rechercher un raccourci"></div>'
+      + '<div><div class="label">' + esc(tr('Combinaison choisie — clique dans la case, puis fais la combinaison sur ton clavier')) + '</div><button type="button" class="capture" data-capture data-autofocus></button></div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="muted small">' + esc(tr('Ou choisis parmi les raccourcis de Windows')) + '</span><span class="muted small" data-count></span></div>'
+      + '<div class="search">' + svg('search', 18) + '<input type="text" data-q placeholder="' + esc(tr('Rechercher : capture, bureau, onglet, volume…')) + '" aria-label="' + esc(tr('Rechercher un raccourci')) + '"></div>'
       + '<div class="chips" data-cats></div>'
       + '<div class="sc-list" data-list></div></div>');
     const cap = body.querySelector('[data-capture]'), qEl = body.querySelector('[data-q]'), listEl = body.querySelector('[data-list]'), catsEl = body.querySelector('[data-cats]');
     const norm = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    cats.forEach((c) => { c[1] = tr(c[1]); });
     const catName = {}; cats.forEach((c) => { catName[c[0]] = c[1]; });
-    const kcaps = (keys, sm) => keys.map((k, i) => (i ? '<span class="plus">+</span>' : '') + '<span class="kcap' + (sm ? ' sm' : '') + '">' + esc(k) + '</span>').join('');
+    const kcaps = (keys, sm) => keys.map((k, i) => (i ? '<span class="plus">+</span>' : '') + '<span class="kcap' + (sm ? ' sm' : '') + '">' + esc(tr(k)) + '</span>').join('');
     const findLabel = (keys) => { const j = keys.join('|'); const f = data.find((d) => d[2] === j); return f ? f[1] : ''; };
     const paintCap = () => {
       cap.classList.toggle('listening', s.listening);
       const shown = s.listening && s.partial.length ? s.partial : s.keys;
-      cap.innerHTML = (shown.length ? kcaps(shown) : '<span class="ph">Clique ici, puis fais la combinaison…</span>')
-        + '<span class="label-r">' + esc(s.listening ? (s.partial.length ? '…' : 'Fais la combinaison…') : (s.label || '')) + '</span>';
+      cap.innerHTML = (shown.length ? kcaps(shown) : '<span class="ph">' + esc(tr('Clique ici, puis fais la combinaison…')) + '</span>')
+        + '<span class="label-r">' + esc(s.listening ? (s.partial.length ? '…' : tr('Fais la combinaison…')) : tr(s.label || '')) + '</span>';
     };
     const paintList = () => {
       const words = norm(s.query).split(/\s+/).filter(Boolean);
-      const found = data.filter((d) => !words.length || words.every((w) => norm(d[1] + ' ' + d[2].replace(/\|/g, ' ') + ' ' + (d[3] || '') + ' ' + (d[4] || '') + ' ' + catName[d[0]]).includes(w)));
+      // Recherche en français ET dans la langue choisie
+      const found = data.filter((d) => !words.length || words.every((w) => norm(d[1] + ' ' + tr(d[1]) + ' ' + d[2].replace(/\|/g, ' ') + ' ' + d[2].split('|').map(tr).join(' ') + ' ' + (d[3] || '') + ' ' + (d[4] || '') + ' ' + tr(d[4] || '') + ' ' + catName[d[0]]).includes(w)));
       const shown = found.filter((d) => s.cat === 'all' || d[0] === s.cat);
-      body.querySelector('[data-count]').textContent = shown.length + (shown.length > 1 ? ' raccourcis' : ' raccourci');
-      catsEl.innerHTML = [['all', 'Tous', found.length]].concat(cats.map((c) => [c[0], c[1], found.filter((d) => d[0] === c[0]).length]))
+      body.querySelector('[data-count]').textContent = trn(shown.length, '{n} raccourci', '{n} raccourcis');
+      catsEl.innerHTML = [['all', tr('Tous'), found.length]].concat(cats.map((c) => [c[0], c[1], found.filter((d) => d[0] === c[0]).length]))
         .filter((c) => c[0] === 'all' || c[2] > 0 || c[0] === s.cat)
         .map((c) => '<button type="button" class="chipbtn' + (c[0] === s.cat ? ' on' : '') + '" data-cat="' + c[0] + '">' + esc(c[1]) + ' <span style="opacity:.7">' + c[2] + '</span></button>').join('');
       const cur = s.keys.join('|');
       const groups = cats.map((c) => [c, shown.filter((d) => d[0] === c[0])]).filter(([, items]) => items.length);
       listEl.innerHTML = groups.length ? groups.map(([c, items]) => '<div><div class="sc-group-title" style="--c:' + c[2] + '"><i></i>' + esc(c[1]) + ' · ' + items.length + '</div><div class="grid2">'
-        + items.map((d) => '<button type="button" class="sc-item' + (d[2] === cur ? ' on' : '') + '" data-keys="' + esc(d[2]) + '" data-name="' + esc(d[1]) + '"><span class="nm"><span>' + esc(d[1]) + '</span>' + (d[4] ? '<small>' + esc(d[4]) + '</small>' : '') + '</span><span class="ks">' + kcaps(d[2].split('|'), true) + '</span></button>').join('')
+        + items.map((d) => '<button type="button" class="sc-item' + (d[2] === cur ? ' on' : '') + '" data-keys="' + esc(d[2]) + '" data-name="' + esc(d[1]) + '"><span class="nm"><span>' + esc(tr(d[1])) + '</span>' + (d[4] ? '<small>' + esc(tr(d[4])) + '</small>' : '') + '</span><span class="ks">' + kcaps(d[2].split('|'), true) + '</span></button>').join('')
         + '</div></div>').join('')
-        : '<div class="muted" style="text-align:center;padding:20px;line-height:1.6">Aucun raccourci trouvé pour « ' + esc(s.query) + ' ».<br>Tu peux aussi cliquer dans la case du haut et faire la combinaison toi-même.</div>';
+        : '<div class="muted" style="text-align:center;padding:20px;line-height:1.6">' + esc(tr('Aucun raccourci trouvé pour « {q} ».', { q: s.query })) + '<br>' + esc(tr('Tu peux aussi cliquer dans la case du haut et faire la combinaison toi-même.')) + '</div>';
     };
     paintCap(); paintList();
     cap.addEventListener('focus', () => { s.listening = true; s.partial = []; paintCap(); });
@@ -1203,13 +1217,13 @@
     catsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; s.cat = b.dataset.cat; paintList(); });
     listEl.addEventListener('click', (e) => { const b = e.target.closest('[data-keys]'); if (!b) return; s.keys = b.dataset.keys.split('|'); s.label = b.dataset.name; paintCap(); paintList(); });
     const m = openModal({
-      kind: 'combo', title: 'Combinaison de touches', sub: 'Fais la combinaison toi-même, ou choisis un raccourci connu.', body, okText: okLabel(a), wide: true,
+      kind: 'combo', title: tr('Combinaison de touches'), sub: tr('Fais la combinaison toi-même, ou choisis un raccourci connu.'), body, okText: okLabel(a), wide: true,
       onOk: (api) => {
-        if (!s.keys.length) { api.msg('Choisis une combinaison.', true); return false; }
+        if (!s.keys.length) { api.msg(tr('Choisis une combinaison.'), true); return false; }
         done({ type: 'combo', keys: s.keys.slice(), label: s.label });
       }
     });
-    m.msg('« Navigateur » ou « certaines apps » : dépend du logiciel ouvert.');
+    m.msg(tr('« Navigateur » ou « certaines apps » : dépend du logiciel ouvert.'));
   }
 
   // =====================================================================
@@ -1218,35 +1232,35 @@
   const countKeys = (c) => Object.values(c.keyboards).reduce((n, k) => n + Object.keys(k.keys).length, 0);
 
   async function exportConfig() {
-    if (!invoke) { toast('Disponible dans le programme seulement.'); return; }
+    if (!invoke) { toast(tr('Disponible dans le programme seulement.')); return; }
     try {
       const d = new Date();
       const name = 'keyboard-bro-' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + '.json';
-      const path = await invoke('plugin:dialog|save', { options: { title: 'Exporter une copie de la configuration', defaultPath: name, filters: [{ name: 'Configuration Keyboard Bro', extensions: ['json'] }] } });
+      const path = await invoke('plugin:dialog|save', { options: { title: tr('Exporter une copie de la configuration'), defaultPath: name, filters: [{ name: tr('Configuration Keyboard Bro'), extensions: ['json'] }] } });
       if (!path) return;
       await invoke('export_config', { path, json: JSON.stringify(cfg, null, 2) });
-      toast('Copie exportée : ' + path);
-    } catch (e) { toast('L’exportation n’a pas marché : ' + e, true); }
+      toast(tr('Copie exportée : ') + path);
+    } catch (e) { toast(tr('L’exportation n’a pas marché : ') + e, true); }
   }
 
   async function importConfig() {
-    const path = await pickFile([{ name: 'Configuration Keyboard Bro', extensions: ['json'] }]);
+    const path = await pickFile([{ name: tr('Configuration Keyboard Bro'), extensions: ['json'] }]);
     if (!path) return;
     let next;
-    try { next = normalize(JSON.parse(await invoke('import_config', { path }))); } catch (e) { toast('Ce fichier n’a pas pu être importé : ' + e, true); return; }
+    try { next = normalize(JSON.parse(await invoke('import_config', { path }))); } catch (e) { toast(tr('Ce fichier n’a pas pu être importé : ') + e, true); return; }
     const n = countKeys(next);
     openModal({
-      kind: 'upload', icon: 'upload', title: 'Remplacer ta configuration ?', sub: path,
-      body: frag('<div class="box warn">Le fichier contient <strong style="display:inline">' + n + (n > 1 ? ' touches assignées' : ' touche assignée') + '</strong>. Ta configuration actuelle sera remplacée. Une copie de sécurité de l’ancienne est gardée à côté (keyboard-bro.avant-import.json).</div>'),
-      okText: 'Remplacer',
+      kind: 'upload', icon: 'upload', title: tr('Remplacer ta configuration ?'), sub: path,
+      body: frag('<div class="box warn">' + esc(tr('Le fichier contient')) + ' <strong style="display:inline">' + esc(trn(n, '{n} touche assignée', '{n} touches assignées')) + '</strong>. ' + esc(tr('Ta configuration actuelle sera remplacée. Une copie de sécurité de l’ancienne est gardée à côté (keyboard-bro.avant-import.json).')) + '</div>'),
+      okText: tr('Remplacer'),
       onOk: () => {
         (async () => {
-          try { await invoke('backup_config'); } catch (e) { toast('Copie de sécurité impossible : ' + e, true); return; }
+          try { await invoke('backup_config'); } catch (e) { toast(tr('Copie de sécurité impossible : ') + e, true); return; }
           cfg = next;
           st.edit = {};
           changed();
           renderAll();
-          toast('Configuration importée.');
+          toast(tr('Configuration importée.'));
         })();
       }
     });
@@ -1260,33 +1274,36 @@
 
   function osWord() {
     const os = platform && platform.os;
-    return os === 'windows' ? 'Windows' : os === 'macos' ? 'le Mac' : 'l’ordinateur';
+    return os === 'windows' ? 'Windows' : os === 'macos' ? tr('le Mac') : tr('l’ordinateur');
   }
 
   async function openSettings() {
     let auto = null;
     if (invoke) { try { auto = await invoke('autostart_state'); } catch (e) { auto = { supported: false, enabled: false, message: String(e) }; } }
-    else auto = { supported: false, enabled: false, message: 'Disponible dans le programme seulement (ici, c’est un aperçu).' };
+    else auto = { supported: false, enabled: false, message: tr('Disponible dans le programme seulement (ici, c’est un aperçu).') };
     const mac = platform && platform.os === 'macos';
-    const where = mac ? 'le Dock' : 'la barre des tâches';
+    const where = mac ? tr('le Dock') : tr('la barre des tâches');
     const body = frag('<div class="dlg-body" style="padding:0;gap:0">'
-      + '<section class="set-section">'
-      + '<div class="eyebrow">Démarrage</div>'
-      + '<div class="set-row"><button type="button" class="switch" role="switch" data-auto aria-labelledby="set-auto-t"><span></span></button>'
-      + '<div class="set-text"><strong id="set-auto-t">Démarrer Keyboard Bro avec ' + esc(osWord()) + '</strong>'
-      + '<span>Keyboard Bro s’ouvre tout seul quand tu ouvres ta session : tes macros sont prêtes sans y penser.</span></div></div>'
-      + '<div class="note set-note" data-auto-note hidden></div>'
-      + '<div class="set-row set-sub" data-min-row><button type="button" class="switch" role="switch" data-min aria-labelledby="set-min-t"><span></span></button>'
-      + '<div class="set-text"><strong id="set-min-t">Ouvrir la fenêtre réduite</strong>'
-      + '<span>Au démarrage de ' + esc(osWord()) + ', la fenêtre reste dans ' + where + '. Les macros marchent quand même.</span></div></div>'
+      + '<section class="set-section"><div class="eyebrow">Langue · Language · Idioma</div>'
+      + '<div class="seg lang-seg" role="group" aria-label="Langue · Language · Idioma">' + KBI18n.LANGS.map(([code, name]) => '<button type="button" data-lang="' + code + '" class="' + (code === KBI18n.lang ? 'on' : '') + '" aria-pressed="' + (code === KBI18n.lang) + '">' + name + '</button>').join('') + '</div>'
       + '</section>'
       + '<section class="set-section">'
-      + '<div class="eyebrow">Fichier de configuration</div>'
+      + '<div class="eyebrow">' + esc(tr('Démarrage')) + '</div>'
+      + '<div class="set-row"><button type="button" class="switch" role="switch" data-auto aria-labelledby="set-auto-t"><span></span></button>'
+      + '<div class="set-text"><strong id="set-auto-t">' + esc(tr('Démarrer Keyboard Bro avec {os}', { os: osWord() })) + '</strong>'
+      + '<span>' + esc(tr('Keyboard Bro s’ouvre tout seul quand tu ouvres ta session : tes macros sont prêtes sans y penser.')) + '</span></div></div>'
+      + '<div class="note set-note" data-auto-note hidden></div>'
+      + '<div class="set-row set-sub" data-min-row><button type="button" class="switch" role="switch" data-min aria-labelledby="set-min-t"><span></span></button>'
+      + '<div class="set-text"><strong id="set-min-t">' + esc(tr('Ouvrir la fenêtre réduite')) + '</strong>'
+      + '<span>' + esc(tr('Au démarrage, la fenêtre reste dans {where}. Les macros marchent quand même.', { where })) + '</span></div></div>'
+      + '</section>'
+      + '<section class="set-section">'
+      + '<div class="eyebrow">' + esc(tr('Fichier de configuration')) + '</div>'
       + '<div class="set-path mono" data-cfg></div>'
       + '</section></div>');
     const autoBtn = body.querySelector('[data-auto]'), minBtn = body.querySelector('[data-min]');
     const note = body.querySelector('[data-auto-note]'), minRow = body.querySelector('[data-min-row]');
-    body.querySelector('[data-cfg]').textContent = cfgPath || '(pas encore sauvegardé)';
+    body.querySelector('[data-cfg]').textContent = cfgPath || tr('(pas encore sauvegardé)');
     let busy = false;
     const paint = () => {
       autoBtn.setAttribute('aria-checked', String(!!auto.enabled));
@@ -1295,10 +1312,10 @@
       minRow.classList.toggle('off', !auto.enabled);
       let text = '', warn = false;
       if (auto.message) { text = auto.message; warn = true; }
-      else if (auto.blocked) { text = 'Keyboard Bro a été désactivé dans le Gestionnaire des tâches (onglet « Applications de démarrage »). Allume l’interrupteur pour le réactiver.'; warn = true; }
-      else if (auto.other) { text = 'Le démarrage lance une autre copie de Keyboard Bro : ' + auto.other + '. Éteins puis rallume l’interrupteur pour utiliser celle-ci.'; warn = true; }
-      else if (auto.enabled && platform && platform.os === 'windows') text = 'Si tu déplaces le fichier de Keyboard Bro, ouvre-le une fois à sa nouvelle place : le démarrage se met à jour tout seul.';
-      else if (auto.enabled && mac) text = 'macOS peut afficher « Élément d’ouverture ajouté » : c’est normal. Tu le retrouves dans Réglages Système › Général › Ouverture.';
+      else if (auto.blocked) { text = tr('Keyboard Bro a été désactivé dans le Gestionnaire des tâches (onglet « Applications de démarrage »). Allume l’interrupteur pour le réactiver.'); warn = true; }
+      else if (auto.other) { text = tr('Le démarrage lance une autre copie de Keyboard Bro : {path}. Éteins puis rallume l’interrupteur pour utiliser celle-ci.', { path: auto.other }); warn = true; }
+      else if (auto.enabled && platform && platform.os === 'windows') text = tr('Si tu déplaces le fichier de Keyboard Bro, ouvre-le une fois à sa nouvelle place : le démarrage se met à jour tout seul.');
+      else if (auto.enabled && mac) text = tr('macOS peut afficher « Élément d’ouverture ajouté » : c’est normal. Tu le retrouves dans Réglages Système › Général › Ouverture.');
       note.hidden = !text;
       note.textContent = text;
       note.classList.toggle('warn', warn);
@@ -1309,15 +1326,19 @@
       busy = true; paint();
       try {
         auto = await invoke('set_autostart', { on: want });
-        toast(want ? 'Keyboard Bro démarrera avec ' + osWord() + '.' : 'Keyboard Bro ne démarrera plus tout seul.');
+        toast(want ? tr('Keyboard Bro démarrera avec {os}.', { os: osWord() }) : tr('Keyboard Bro ne démarrera plus tout seul.'));
       } catch (e) {
         auto = Object.assign({}, auto, { message: String(e) });
       }
       busy = false; paint();
     });
     minBtn.addEventListener('click', () => { cfg.startMinimized = !cfg.startMinimized; changed(); paint(); });
+    body.querySelector('.lang-seg').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-lang]');
+      if (b && b.dataset.lang !== KBI18n.lang) switchLanguage(b.dataset.lang);
+    });
     paint();
-    openModal({ kind: 'gear', title: 'Réglages', sub: 'Les changements sont appliqués tout de suite.', body, okText: 'Fermer', noCancel: true, onOk: () => {} });
+    openModal({ kind: 'gear', title: tr('Réglages'), sub: tr('Les changements sont appliqués tout de suite.'), body, okText: tr('Fermer'), noCancel: true, onOk: () => {} });
   }
 
   // =====================================================================
@@ -1330,14 +1351,16 @@
     setKeyboards(await invoke('list_keyboards'));
     try { st.status = await invoke('macro_status'); } catch { st.status = null; }
     paintMacros();
-    if (st.status && !st.status.blocking && st.status.message) banner('Les touches programmées ne peuvent pas être cachées aux autres programmes : ' + st.status.message + ' Les macros partent quand même, mais la touche fait aussi son travail normal.');
+    if (st.status && !st.status.blocking && st.status.message) banner(tr('Les touches programmées ne peuvent pas être cachées aux autres programmes : ') + st.status.message + tr(' Les macros partent quand même, mais la touche fait aussi son travail normal.'));
   }
 
   function startDemo(info) {
-    $('mode-pill').textContent = 'Mode démonstration';
+    $('mode-pill').textContent = tr('Mode démonstration');
     $('mode-pill').classList.add('demo');
-    banner((info && info.os === 'macos' ? 'Sur Mac' : 'Sur ce système') + ', Keyboard Bro ne sait pas encore reconnaître chaque clavier séparément (ça arrive bientôt). En attendant, tape dans cette fenêtre : les touches s’allument sur le dessin.');
-    setKeyboards([{ id: 'demo', name: 'Clavier de cet ordinateur', vendor: '', vid: '', pid: '', interfaces: 1, virtual: false, bus: '' }]);
+    banner(info && info.os === 'macos'
+      ? tr('Sur Mac, Keyboard Bro ne sait pas encore reconnaître chaque clavier séparément (ça arrive bientôt). En attendant, tape dans cette fenêtre : les touches s’allument sur le dessin.')
+      : tr('Sur ce système, Keyboard Bro ne sait pas encore reconnaître chaque clavier séparément (ça arrive bientôt). En attendant, tape dans cette fenêtre : les touches s’allument sur le dessin.'));
+    setKeyboards([{ id: 'demo', name: tr('Clavier de cet ordinateur'), vendor: '', vid: '', pid: '', interfaces: 1, virtual: false, bus: '' }]);
     const handler = (down) => (e) => {
       if (st.dialog || isTyping(e.target)) return;
       onKey({ device: 'demo', down, code: e.code }, KBKeymap.fromCode(e.code));
@@ -1346,22 +1369,45 @@
     window.addEventListener('keyup', handler(false));
   }
 
+  /** Changer de langue : on sauvegarde, puis la fenêtre se recharge (tout est redessiné dans la nouvelle langue). */
+  async function switchLanguage(lang) {
+    cfg.lang = lang;
+    clearTimeout(saveTimer);
+    await saveNow();
+    KBI18n.set(lang);
+    try { sessionStorage.setItem('kb.macrosOn', String(st.macrosOn)); } catch { /* rien */ }
+    location.reload();
+  }
+
   async function boot() {
+    KBI18n.translateDom(document.body);
+    document.title = tr(document.title);
+    try { const m = sessionStorage.getItem('kb.macrosOn'); if (m) { st.macrosOn = m === 'true'; sessionStorage.removeItem('kb.macrosOn'); } } catch { /* rien */ }
     fit();
     let info = null;
     if (invoke) { try { info = await invoke('platform_info'); } catch { info = null; } }
     platform = info;
     $('settings-btn').innerHTML = svg('gear', 18);
     $('settings-btn').addEventListener('click', openSettings);
-    $('footer-left').textContent = 'Keyboard Bro ' + (info ? info.version + ' · ' + info.os + ' ' + info.arch : '(aperçu)');
+    $('footer-left').textContent = 'Keyboard Bro ' + (info ? info.version + ' · ' + info.os + ' ' + info.arch : tr('(aperçu)'));
     st.live = !!(info && info.live);
     await loadConfig();
+    // La langue gardée dans la config passe avant celle de l'ordinateur (ex. après un import).
+    let reloaded = false;
+    try { reloaded = sessionStorage.getItem('kb.langReload') === '1'; sessionStorage.removeItem('kb.langReload'); } catch { reloaded = true; }
+    if (cfg.lang && cfg.lang !== KBI18n.lang && !reloaded) {
+      KBI18n.set(cfg.lang);
+      try { sessionStorage.setItem('kb.langReload', '1'); } catch { /* rien */ }
+      location.reload();   // une seule fois : pas de boucle si le stockage ne marche pas
+      return;
+    }
+    if (invoke) invoke('set_language', { lang: KBI18n.lang }).catch(() => {});
     paintSave();
     logEmpty();
     if (st.live) {
       $('mode-pill').hidden = true;
       $('macros-btn').addEventListener('click', toggleMacros);
-      try { await startLive(); } catch (err) { banner('Erreur au démarrage : ' + err); }
+      try { await startLive(); } catch (err) { banner(tr('Erreur au démarrage : ') + err); }
     } else {
       startDemo(info);
     }

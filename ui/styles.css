@@ -423,3 +423,5 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .set-note { margin: 2px 0 0 56px; }
 .set-note.warn { background: var(--warn-soft); color: var(--warn-ink); border-color: transparent; }
 .set-path { font-size: 12px; word-break: break-all; color: var(--muted); }
+.lang-seg { align-self: flex-start; }
+.lang-seg button { min-width: 96px; }

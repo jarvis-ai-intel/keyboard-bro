@@ -7,7 +7,7 @@
 //  - configuration des touches (étapes 1-2-3), sauvegardée dans keyboard-bro.json;
 //  - les touches programmées du clavier à macros sont cachées aux autres programmes
 //    et lancent leurs actions (module « macros »).
-//  - Réglages : démarrer avec Windows / le Mac (module « autostart »).
+//  - Réglages : démarrer avec Windows / le Mac (module « autostart »), langue (module « lang »).
 //
 //  L'interface (dossier « ui ») parle au cœur par :
 //  - des commandes (list_keyboards, set_bindings, load_config, save_config, list_browsers…);
@@ -15,6 +15,8 @@
 //    « kb-notice » (un message, ex. une macro qui n'a pas marché).
 // =====================================================================
 
+#[macro_use]
+mod lang;
 mod autostart;
 mod browsers;
 mod config;
@@ -98,6 +100,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            if let Some(l) = config::saved_lang(app.handle()) {
+                lang::set(&l);
+            }
             size_window(app);
             autostart::refresh();
             let notice = app.handle().clone();
@@ -131,6 +136,7 @@ pub fn run() {
             browsers::list_browsers,
             autostart::autostart_state,
             autostart::set_autostart,
+            lang::set_language,
         ])
         .run(tauri::generate_context!())
         .expect("Keyboard Bro n'a pas pu démarrer");

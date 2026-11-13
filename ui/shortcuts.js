@@ -23,7 +23,7 @@ const KBShortcuts = {
       ['edit', 'Copier', 'Ctrl|C', 'copy'],
       ['edit', 'Coller', 'Ctrl|V', 'paste'],
       ['edit', 'Coller sans mise en forme', 'Ctrl|Maj|V', 'texte brut paste', 'certaines apps'],
-      ['edit', 'Annuler', 'Ctrl|Z', 'undo defaire'],
+      ['edit', 'Annuler (défaire)', 'Ctrl|Z', 'undo defaire annuler'],
       ['edit', 'Rétablir', 'Ctrl|Y', 'redo refaire'],
       ['edit', 'Tout sélectionner', 'Ctrl|A', 'select all selection'],
       ['edit', 'Enregistrer', 'Ctrl|S', 'save sauvegarder'],

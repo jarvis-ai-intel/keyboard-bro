@@ -43,7 +43,7 @@ pub struct State {
 }
 
 fn this_exe() -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| format!("chemin du programme introuvable ({e})"))?;
+    let exe = std::env::current_exe().map_err(|e| tr!("chemin du programme introuvable ({e})", "program path not found ({e})", "no se encuentra la ruta del programa ({e})"))?;
     // Windows : current_exe() est déjà complet (canonicalize donnerait « \\?\C:\… »).
     // Mac / Linux : on suit les liens symboliques pour avoir le vrai chemin.
     if cfg!(windows) {
@@ -66,10 +66,10 @@ fn refuse_reason(exe: &Path) -> Option<String> {
     let s = exe.display().to_string();
     if cfg!(target_os = "macos") {
         if s.contains("/AppTranslocation/") {
-            return Some("macOS fait tourner Keyboard Bro depuis un dossier temporaire. Glisse d'abord Keyboard Bro dans le dossier Applications, rouvre-le, puis coche la case.".into());
+            return Some(tr!("macOS fait tourner Keyboard Bro depuis un dossier temporaire. Glisse d'abord Keyboard Bro dans le dossier Applications, rouvre-le, puis allume l'interrupteur.", "macOS is running Keyboard Bro from a temporary folder. First drag Keyboard Bro into the Applications folder, reopen it, then turn the switch on.", "macOS está ejecutando Keyboard Bro desde una carpeta temporal. Primero arrastra Keyboard Bro a la carpeta Aplicaciones, vuelve a abrirlo y luego activa el interruptor."));
         }
         if s.starts_with("/Volumes/") {
-            return Some("Keyboard Bro est ouvert directement depuis l'image disque. Glisse-le d'abord dans le dossier Applications, rouvre-le, puis coche la case.".into());
+            return Some(tr!("Keyboard Bro est ouvert directement depuis l'image disque. Glisse-le d'abord dans le dossier Applications, rouvre-le, puis allume l'interrupteur.", "Keyboard Bro is open straight from the disk image. First drag it into the Applications folder, reopen it, then turn the switch on.", "Keyboard Bro está abierto directamente desde la imagen de disco. Primero arrástralo a la carpeta Aplicaciones, vuelve a abrirlo y luego activa el interruptor."));
         }
     }
     None
@@ -164,7 +164,7 @@ mod sys {
             return Ok(None);
         }
         if err != ERROR_SUCCESS {
-            return Err(format!("lecture du registre impossible (erreur {err})"));
+            return Err(tr!("lecture du registre impossible (erreur {err})", "couldn’t read the registry (error {err})", "no se pudo leer el registro (error {err})"));
         }
         let mut buf = vec![0u8; size as usize + 2];
         let mut size = buf.len() as u32;
@@ -175,7 +175,7 @@ mod sys {
             return Ok(None);
         }
         if err != ERROR_SUCCESS {
-            return Err(format!("lecture du registre impossible (erreur {err})"));
+            return Err(tr!("lecture du registre impossible (erreur {err})", "couldn’t read the registry (error {err})", "no se pudo leer el registro (error {err})"));
         }
         buf.truncate(size as usize);
         Ok(Some(buf))
@@ -187,7 +187,7 @@ mod sys {
         if err == ERROR_SUCCESS {
             Ok(())
         } else {
-            Err(format!("écriture dans le registre impossible (erreur {err}) — une règle de l'ordinateur (ex. au travail) bloque peut-être les programmes au démarrage"))
+            Err(tr!("écriture dans le registre impossible (erreur {err}) — une règle de l'ordinateur (ex. au travail) bloque peut-être les programmes au démarrage", "couldn’t write to the registry (error {err}) — a computer policy (e.g. at work) may be blocking startup programs", "no se pudo escribir en el registro (error {err}) — quizá una regla de la computadora (p. ej. en el trabajo) bloquea los programas de inicio"))
         }
     }
 
@@ -197,7 +197,7 @@ mod sys {
         if err == ERROR_SUCCESS || err == ERROR_FILE_NOT_FOUND {
             Ok(())
         } else {
-            Err(format!("suppression dans le registre impossible (erreur {err})"))
+            Err(tr!("suppression dans le registre impossible (erreur {err})", "couldn’t delete from the registry (error {err})", "no se pudo borrar del registro (error {err})"))
         }
     }
 
@@ -251,7 +251,7 @@ mod sys {
     use std::path::{Path, PathBuf};
 
     fn home() -> Result<PathBuf, String> {
-        std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| "dossier de l'utilisateur introuvable".to_string())
+        std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| tr!("dossier de l'utilisateur introuvable", "user folder not found", "no se encuentra la carpeta del usuario"))
     }
 
     #[cfg(target_os = "macos")]
@@ -330,18 +330,28 @@ mod sys {
                 Ok(Some(Entry { exe: exe_of(&text), blocked }))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(format!("lecture de {} impossible ({e})", f.display())),
+            Err(e) => {
+                let f = f.display();
+                Err(tr!("lecture de {f} impossible ({e})", "couldn’t read {f} ({e})", "no se pudo leer {f} ({e})"))
+            }
         }
     }
 
     pub fn write(exe: &Path) -> Result<(), String> {
         let f = file()?;
         if let Some(dir) = f.parent() {
-            fs::create_dir_all(dir).map_err(|e| format!("création de {} impossible ({e})", dir.display()))?;
+            fs::create_dir_all(dir).map_err(|e| {
+                let d = dir.display();
+                tr!("création de {d} impossible ({e})", "couldn’t create {d} ({e})", "no se pudo crear {d} ({e})")
+            })?;
         }
         let tmp = f.with_extension("tmp");
-        fs::write(&tmp, content(exe)).map_err(|e| format!("écriture de {} impossible ({e})", f.display()))?;
-        fs::rename(&tmp, &f).map_err(|e| format!("écriture de {} impossible ({e})", f.display()))
+        let failed = |e: std::io::Error| {
+            let f = f.display();
+            tr!("écriture de {f} impossible ({e})", "couldn’t write {f} ({e})", "no se pudo escribir {f} ({e})")
+        };
+        fs::write(&tmp, content(exe)).map_err(failed)?;
+        fs::rename(&tmp, &f).map_err(failed)
     }
 
     pub fn remove() -> Result<(), String> {
@@ -349,7 +359,10 @@ mod sys {
         match fs::remove_file(&f) {
             Ok(_) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(format!("suppression de {} impossible ({e})", f.display())),
+            Err(e) => {
+                let f = f.display();
+                Err(tr!("suppression de {f} impossible ({e})", "couldn’t delete {f} ({e})", "no se pudo borrar {f} ({e})"))
+            }
         }
     }
 }

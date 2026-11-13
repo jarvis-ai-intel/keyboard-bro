@@ -52,7 +52,7 @@ pub fn run_action(a: &Value) -> Result<(), String> {
         "text" => insert_text(a),
         "combo" => combo(a),
         "wait" => wait(a),
-        other => Err(format!("action inconnue « {other} »")),
+        other => Err(tr!("action inconnue « {other} »", "unknown action “{other}”", "acción desconocida «{other}»")),
     }
 }
 
@@ -110,20 +110,20 @@ fn shell_open(file: &str, params: &str, show: i32) -> Result<(), String> {
         return Ok(());
     }
     Err(match r {
-        2 => format!("« {file} » est introuvable"),
-        3 => format!("le dossier de « {file} » est introuvable"),
-        5 => format!("Windows refuse d'ouvrir « {file} » (accès refusé)"),
-        8 => "pas assez de mémoire".into(),
-        26 | 32 => format!("« {file} » est déjà utilisé par un autre programme"),
-        27 | 31 => format!("aucun programme n'est choisi pour ouvrir « {file} »"),
-        _ => format!("« {file} » n'a pas pu être ouvert (code {r})"),
+        2 => tr!("« {file} » est introuvable", "“{file}” can’t be found", "no se encuentra «{file}»"),
+        3 => tr!("le dossier de « {file} » est introuvable", "the folder of “{file}” can’t be found", "no se encuentra la carpeta de «{file}»"),
+        5 => tr!("Windows refuse d'ouvrir « {file} » (accès refusé)", "Windows refuses to open “{file}” (access denied)", "Windows se niega a abrir «{file}» (acceso denegado)"),
+        8 => tr!("pas assez de mémoire", "not enough memory", "no hay suficiente memoria"),
+        26 | 32 => tr!("« {file} » est déjà utilisé par un autre programme", "“{file}” is already in use by another program", "«{file}» ya está en uso por otro programa"),
+        27 | 31 => tr!("aucun programme n'est choisi pour ouvrir « {file} »", "no program is set to open “{file}”", "no hay ningún programa elegido para abrir «{file}»"),
+        _ => tr!("« {file} » n'a pas pu être ouvert (code {r})", "“{file}” couldn’t be opened (code {r})", "no se pudo abrir «{file}» (código {r})"),
     })
 }
 
 fn open_prog(a: &Value) -> Result<(), String> {
     let path = expand_env(text_of(a, "path").trim());
     if path.is_empty() {
-        return Err("aucun programme choisi".into());
+        return Err(tr!("aucun programme choisi", "no program chosen", "no se eligió ningún programa"));
     }
     let show = match text_of(a, "window") {
         "max" => SW_SHOWMAXIMIZED,
@@ -136,7 +136,7 @@ fn open_prog(a: &Value) -> Result<(), String> {
 fn open_url(a: &Value) -> Result<(), String> {
     let url = text_of(a, "url").trim();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err(format!("adresse invalide « {url} »"));
+        return Err(tr!("adresse invalide « {url} »", "invalid address “{url}”", "dirección no válida «{url}»"));
     }
     let browser = text_of(a, "browser");
     let exe = expand_env(text_of(a, "browserPath").trim());
@@ -176,7 +176,7 @@ fn send(inputs: &[INPUT]) -> Result<(), String> {
     let sent = unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), size_of::<INPUT>() as i32) };
     if sent as usize != inputs.len() {
         // Windows refuse les touches simulées vers un programme lancé en administrateur.
-        return Err("Windows a refusé les touches simulées (la fenêtre active est peut-être un programme lancé en administrateur)".into());
+        return Err(tr!("Windows a refusé les touches simulées (la fenêtre active est peut-être un programme lancé en administrateur)", "Windows refused the simulated keys (the active window may be a program running as administrator)", "Windows rechazó las teclas simuladas (la ventana activa quizá sea un programa ejecutado como administrador)"));
     }
     Ok(())
 }
@@ -199,7 +199,7 @@ fn combo(a: &Value) -> Result<(), String> {
         .map(|v| v.iter().filter_map(|k| k.as_str().map(str::to_string)).collect())
         .unwrap_or_default();
     if names.is_empty() {
-        return Err("combinaison vide".into());
+        return Err(tr!("combinaison vide", "empty combination", "combinación vacía"));
     }
     let mut keys: Vec<(u16, bool)> = Vec::new();
     for n in &names {
@@ -208,7 +208,7 @@ fn combo(a: &Value) -> Result<(), String> {
             Some(ComboKey::Char(c)) => {
                 let r = unsafe { VkKeyScanW(c as u16) };
                 if r == -1 {
-                    return Err(format!("la touche « {c} » n'existe pas sur ce clavier"));
+                    return Err(tr!("la touche « {c} » n'existe pas sur ce clavier", "the “{c}” key doesn’t exist on this keyboard", "la tecla «{c}» no existe en este teclado"));
                 }
                 let (vk, shifts) = ((r & 0xFF) as u16, ((r >> 8) & 0xFF) as u8);
                 if shifts & 1 != 0 && !keys.contains(&(0x10, false)) {
@@ -222,7 +222,7 @@ fn combo(a: &Value) -> Result<(), String> {
                 }
                 keys.push((vk, false));
             }
-            None => return Err(format!("touche inconnue « {n} »")),
+            None => return Err(tr!("touche inconnue « {n} »", "unknown key “{n}”", "tecla desconocida «{n}»")),
         }
     }
     press_together(&keys)?;
@@ -345,9 +345,9 @@ fn insert_text(a: &Value) -> Result<(), String> {
         type_text(&text)?;
     } else {
         {
-            let Some(c) = Clipboard::open() else { return Err("le presse-papiers est occupé par un autre programme".into()) };
+            let Some(c) = Clipboard::open() else { return Err(tr!("le presse-papiers est occupé par un autre programme", "the clipboard is busy with another program", "el portapapeles está ocupado por otro programa")) };
             if !c.set_text(&text.replace('\n', "\r\n")) {
-                return Err("impossible de mettre le texte dans le presse-papiers".into());
+                return Err(tr!("impossible de mettre le texte dans le presse-papiers", "couldn’t put the text on the clipboard", "no se pudo poner el texto en el portapapeles"));
             }
         }
         std::thread::sleep(Duration::from_millis(30));

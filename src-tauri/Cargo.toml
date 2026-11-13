@@ -1,6 +1,6 @@
 [package]
 name = "keyboard-bro"
-version = "0.4.4"
+version = "0.5.0"
 description = "Keyboard Bro — un 2e clavier pour tes macros"
 authors = ["Jarvis"]
 edition = "2021"

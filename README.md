@@ -20,6 +20,7 @@
   <img src="https://img.shields.io/badge/x64%20%2B%20ARM64-oui-2B7A4B" alt="x64 et ARM64">
   <img src="https://img.shields.io/badge/Mac-bient%C3%B4t-8A6D00" alt="Mac bientôt">
   <img src="https://img.shields.io/badge/prix-gratuit-2B7A4B" alt="Gratuit">
+  <img src="https://img.shields.io/badge/langues-FR%20%C2%B7%20EN%20%C2%B7%20ES-7A3FB5" alt="Français, anglais, espagnol">
 </p>
 
 <p align="center">
@@ -55,13 +56,14 @@ Le plus difficile, c'est que Windows voit tous les claviers comme un seul : il n
 2. **Dis ce qu'elle fait** : ajoute une ou plusieurs actions, dans l'ordre que tu veux :
    - 📁 **Ouvrir un fichier ou un programme** (fenêtre normale, agrandie ou réduite)
    - 🔗 **Ouvrir une URL** (navigateur par défaut ou un autre, navigation privée possible)
-   - 📝 **Coller du texte**, avec des variables : `{date}`, `{heure}`, `{presse-papiers}`, `{curseur}`
+   - 📝 **Coller du texte**, avec des valeurs automatiques : `{date}`, `{heure}`, `{presse-papiers}`, `{curseur}`
    - ⌨️ **Combinaison de touches** (Ctrl, Alt, Maj, Win, F1 à F24, flèches, multimédia…)
    - ⏱️ **Attendre** un temps fixe, ou qu'une fenêtre s'ouvre
 3. **C'est tout** : c'est sauvegardé automatiquement. Va dans n'importe quel autre programme et appuie sur la touche.
 
 ## Fonctionnalités
 
+- 🌍 **En français, en anglais et en espagnol** : choisis la langue dans ⚙ Réglages (au départ, c'est celle de ton ordinateur).
 - 🎹 **Un onglet par clavier**, avec son nom, son fabricant et un **dessin de ses touches** (12 dispositions : complet, compact, sans pavé numérique, ISO canadien français, Apple avec F13 à F19, pavé numérique seul…).
 - 🖥️ **Terminal en direct** : chaque touche appuyée, de quel clavier elle vient, et quelle macro est partie.
 - 🔒 **Clavier principal verrouillé** : Keyboard Bro ne touche jamais à ses touches (sauf si tu le permets, par exemple pour F13 à F19).
@@ -133,11 +135,11 @@ Il existe d'autres façons d'utiliser un 2e clavier, mais elles demandent souven
 - ✅ **0.2** : étapes 1-2-3, fenêtres d'actions, sauvegarde automatique, export et import, clavier principal verrouillé
 - ✅ **0.3** : Logitech G710 / G710+, touches multimédia, souris mises de côté
 - ✅ **0.4** : les macros marchent (actions + touches cachées), démarrer avec Windows, nouveau logo
+- ✅ **0.5** : interface en français, en anglais et en espagnol
 - ⏳ Profils (un jeu de touches par programme : Photoshop, OBS, Excel…)
 - ⏳ Importer un script AutoHotkey (`.ahk`) et le convertir en profil
 - ⏳ Étiquettes à imprimer pour coller sur les touches
 - ⏳ Version Mac complète, puis Linux
-- ⏳ Interface en anglais
 - ⏳ Connexion IA (MCP) : laisser un assistant comme Claude créer tes macros pour toi
 
 ## Pour les développeurs

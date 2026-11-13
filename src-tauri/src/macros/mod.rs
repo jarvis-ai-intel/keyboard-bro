@@ -60,7 +60,8 @@ pub fn run(name: String, actions: Vec<Value>) {
 fn run_now(name: &str, actions: &[Value]) {
     for (i, a) in actions.iter().enumerate() {
         if let Err(e) = run_action(a) {
-            notify(false, format!("Macro « {name} », action {} : {e}", i + 1));
+            let n = i + 1;
+            notify(false, tr!("Macro « {name} », action {n} : {e}", "Macro “{name}”, action {n}: {e}", "Macro «{name}», acción {n}: {e}"));
             return;
         }
     }
@@ -73,7 +74,7 @@ fn run_action(a: &Value) -> Result<(), String> {
 
 #[cfg(not(windows))]
 fn run_action(_a: &Value) -> Result<(), String> {
-    Err("les macros marchent sous Windows seulement pour l'instant".into())
+    Err(tr!("les macros marchent sous Windows seulement pour l'instant", "macros only work on Windows for now", "por ahora las macros solo funcionan en Windows"))
 }
 
 // ---------------------------------------------------------------------
@@ -85,23 +86,70 @@ pub fn text_of<'a>(a: &'a Value, key: &str) -> &'a str {
     a.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
-const MONTHS: [&str; 12] = [
+const MONTHS_FR: [&str; 12] = [
     "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
+const MONTHS_EN: [&str; 12] = [
+    "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December",
+];
+const MONTHS_ES: [&str; 12] = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
 
-/// Le texte final : {date}, {heure} et {presse-papiers} remplacés.
+/// Les noms de chaque valeur automatique, dans les 3 langues : tous marchent, peu importe la langue choisie.
+const DATE: [&str; 2] = ["{date}", "{fecha}"];
+const TIME: [&str; 3] = ["{heure}", "{time}", "{hora}"];
+const CLIP: [&str; 3] = ["{presse-papiers}", "{clipboard}", "{portapapeles}"];
+const CURSOR: [&str; 2] = ["{curseur}", "{cursor}"];
+
+/// Date et heure écrites comme dans la langue choisie :
+/// fr « 12 novembre 2026 », « 08 h 05 » · en « November 12, 2026 », « 8:05 AM » · es « 12 de noviembre de 2026 », « 08:05 ».
+fn date_time(lang: u8, y: u16, mo: u16, d: u16, h: u16, mi: u16) -> (String, String) {
+    let m = (mo.clamp(1, 12) - 1) as usize;
+    match lang {
+        crate::lang::EN => {
+            let (h12, ampm) = match h % 24 {
+                0 => (12, "AM"),
+                x @ 1..=11 => (x, "AM"),
+                12 => (12, "PM"),
+                x => (x - 12, "PM"),
+            };
+            (format!("{} {d}, {y}", MONTHS_EN[m]), format!("{h12}:{mi:02} {ampm}"))
+        }
+        crate::lang::ES => (format!("{d} de {} de {y}", MONTHS_ES[m]), format!("{h:02}:{mi:02}")),
+        _ => (format!("{d} {} {y}", MONTHS_FR[m]), format!("{h:02} h {mi:02}")),
+    }
+}
+
+/// Le texte final : {date}, {heure} et {presse-papiers} remplacés (dans la langue de l'interface).
 /// Retourne aussi combien de caractères il faut reculer pour {curseur}.
 #[allow(dead_code)]
 pub fn expand(text: &str, y: u16, mo: u16, d: u16, h: u16, mi: u16, clipboard: &str) -> (String, usize) {
-    let month = MONTHS.get((mo.max(1) - 1) as usize).copied().unwrap_or("");
-    let t = text
-        .replace("\r\n", "\n")
-        .replace("{date}", &format!("{d} {month} {y}"))
-        .replace("{heure}", &format!("{h:02} h {mi:02}"))
-        .replace("{presse-papiers}", &clipboard.replace("\r\n", "\n"));
-    match t.find("{curseur}") {
-        Some(pos) => {
-            let after = t[pos + "{curseur}".len()..].replace("{curseur}", "");
+    expand_in(crate::lang::current(), text, y, mo, d, h, mi, clipboard)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn expand_in(lang: u8, text: &str, y: u16, mo: u16, d: u16, h: u16, mi: u16, clipboard: &str) -> (String, usize) {
+    let (date, time) = date_time(lang, y, mo, d, h, mi);
+    let clip = clipboard.replace("\r\n", "\n");
+    let mut t = text.replace("\r\n", "\n");
+    for n in DATE {
+        t = t.replace(n, &date);
+    }
+    for n in TIME {
+        t = t.replace(n, &time);
+    }
+    for n in CLIP {
+        t = t.replace(n, &clip);
+    }
+    // {curseur} : le premier trouvé (peu importe son nom) donne la place du curseur; les autres sont enlevés.
+    let first = CURSOR.iter().filter_map(|n| t.find(n).map(|p| (p, n.len()))).min();
+    match first {
+        Some((pos, len)) => {
+            let mut after = t[pos + len..].to_string();
+            for n in CURSOR {
+                after = after.replace(n, "");
+            }
             let back = after.chars().count();
             (format!("{}{}", &t[..pos], after), back)
         }
@@ -226,6 +274,14 @@ mod tests {
         assert_eq!(back, "\nLe 12 novembre 2026 à 08 h 05".chars().count());
         assert_eq!(expand("[{presse-papiers}]", 2026, 1, 1, 0, 0, "copié").0, "[copié]");
         assert_eq!(expand("rien", 2026, 1, 1, 0, 0, "").1, 0);
+        // anglais et espagnol, et les noms de valeurs des autres langues
+        assert_eq!(expand_in(crate::lang::EN, "{date} {time}", 2026, 11, 12, 8, 5, "").0, "November 12, 2026 8:05 AM");
+        assert_eq!(expand_in(crate::lang::EN, "{heure}", 2026, 1, 1, 0, 7, "").0, "12:07 AM");
+        assert_eq!(expand_in(crate::lang::EN, "{hora}", 2026, 1, 1, 13, 0, "").0, "1:00 PM");
+        assert_eq!(expand_in(crate::lang::ES, "{fecha}, {hora}", 2026, 11, 12, 8, 5, "").0, "12 de noviembre de 2026, 08:05");
+        assert_eq!(expand_in(crate::lang::FR, "[{clipboard}|{portapapeles}]", 2026, 1, 1, 0, 0, "x").0, "[x|x]");
+        let (t, back) = expand_in(crate::lang::ES, "ab{cursor}cd{curseur}e", 2026, 1, 1, 0, 0, "");
+        assert_eq!((t.as_str(), back), ("abcde", 3));
     }
 
     #[test]

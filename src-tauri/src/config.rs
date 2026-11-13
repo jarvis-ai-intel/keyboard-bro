@@ -54,7 +54,7 @@ fn config_path(app: &AppHandle) -> PathBuf {
 fn check_json(text: &str) -> Result<(), String> {
     serde_json::from_str::<serde_json::Value>(text)
         .map(|_| ())
-        .map_err(|e| format!("le fichier n'est pas du JSON valide ({e})"))
+        .map_err(|e| tr!("le fichier n'est pas du JSON valide ({e})", "the file is not valid JSON ({e})", "el archivo no es un JSON válido ({e})"))
 }
 
 fn write_safely(path: &Path, text: &str) -> Result<(), String> {
@@ -88,6 +88,14 @@ pub fn load_config(app: AppHandle) -> Loaded {
         }
         None => Loaded { path: shown, json: None, recovered: None },
     }
+}
+
+/// Langue choisie dans les Réglages (« fr », « en », « es »), si elle est gardée.
+pub fn saved_lang(app: &AppHandle) -> Option<String> {
+    fs::read_to_string(config_path(app))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v.get("lang").and_then(|l| l.as_str()).map(str::to_string))
 }
 
 /// Réglage « Ouvrir la fenêtre réduite » quand Keyboard Bro part avec l'ordinateur.
@@ -132,7 +140,7 @@ pub fn export_config(path: String, json: String) -> Result<(), String> {
 pub fn import_config(path: String) -> Result<String, String> {
     let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
     if size > MAX_SIZE {
-        return Err("le fichier est trop gros pour être une configuration".into());
+        return Err(tr!("le fichier est trop gros pour être une configuration", "the file is too big to be a configuration", "el archivo es demasiado grande para ser una configuración"));
     }
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     check_json(&text)?;

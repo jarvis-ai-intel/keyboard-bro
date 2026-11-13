@@ -136,7 +136,7 @@ pub fn set_bindings(_list: Vec<Binding>, _enabled: bool) {}
 
 #[cfg(not(windows))]
 pub fn macro_status() -> MacroStatus {
-    MacroStatus { message: "Les macros marchent sous Windows seulement pour l'instant.".into(), ..Default::default() }
+    MacroStatus { message: tr!("Les macros marchent sous Windows seulement pour l'instant.", "Macros only work on Windows for now.", "Por ahora las macros solo funcionan en Windows."), ..Default::default() }
 }
 
 /// La touche `b` correspond-elle à ce que Windows a envoyé ?
@@ -151,7 +151,7 @@ pub fn matches(b: &Binding, make: u16, e0: bool, vk: u16) -> bool {
 
 #[cfg(not(windows))]
 pub fn g710_feature(_device: &str, _report: &[u8]) -> Result<u32, String> {
-    Err("disponible sous Windows seulement pour l'instant".into())
+    Err(tr!("disponible sous Windows seulement pour l'instant", "only available on Windows for now", "por ahora solo disponible en Windows"))
 }
 
 /// Modèles reconnus, qui ont des touches spéciales à lire autrement.
