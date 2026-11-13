@@ -547,7 +547,7 @@ unsafe fn on_hid(raw: &RAWINPUT, total: usize) {
                     for (b, name) in G710_KEYS.iter().enumerate() {
                         if changed & (1 << b) != 0 {
                             let down = bits & (1 << b) != 0;
-                            events.push(special(&entry.group, Some(name), down, format!("G710 · rapport 03 · bit {b}")));
+                            events.push(special(&entry.group, Some(name), down, tr!("G710 · rapport 03 · bit {b}", "G710 · report 03 · bit {b}", "G710 · reporte 03 · bit {b}", "G710 · отчет 03 · бит {b}")));
                         }
                     }
                     entry.last_bits = bits;
@@ -571,10 +571,10 @@ unsafe fn on_hid(raw: &RAWINPUT, total: usize) {
                     }
                     let now: Vec<u16> = usages[..(len as usize).min(usages.len())].iter().copied().filter(|&u| u != 0).collect();
                     for &u in now.iter().filter(|u| !entry.last_usages.contains(u)) {
-                        events.push(special(&entry.group, consumer_name(u), true, format!("multimédia 0x{u:03X}")));
+                        events.push(special(&entry.group, consumer_name(u), true, tr!("multimédia 0x{u:03X}", "media 0x{u:03X}", "multimedia 0x{u:03X}", "медия 0x{u:03X}")));
                     }
                     for &u in entry.last_usages.iter().filter(|u| !now.contains(u)) {
-                        events.push(special(&entry.group, consumer_name(u), false, format!("multimédia 0x{u:03X}")));
+                        events.push(special(&entry.group, consumer_name(u), false, tr!("multimédia 0x{u:03X}", "media 0x{u:03X}", "multimedia 0x{u:03X}", "медия 0x{u:03X}")));
                     }
                     entry.last_usages = now;
                 }

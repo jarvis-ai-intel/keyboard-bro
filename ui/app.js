@@ -856,7 +856,8 @@
       + '<span class="tag" style="--c:' + color + '">' + esc(titleOf(kb)) + '</span>'
       + '<span class="k">' + esc(keyLabel(kid)) + '</span><span>' + (ev.down ? '↓' : '↑') + '</span>'
       + (ev.fired ? '<span class="' + (ev.skipped ? 'skip' : 'fire') + '" title="' + esc(ev.skipped ? tr('Pas lancée : ') + ev.skipped : tr('Macro lancée')) + '">→ ' + esc(ev.fired) + (ev.skipped ? tr(' (pas lancée)') : '') + '</span>' : '')
-      + (ev.blocked && !ev.fired && ev.down ? '<span class="hid" title="' + esc(tr('Touche programmée : cachée aux autres programmes')) + '">' + esc(tr('cachée')) + '</span>' : '')
+      // colonne « cachée » toujours là (vide au besoin) : les codes restent alignés
+      + (ev.blocked && !ev.fired && ev.down ? '<span class="hid" title="' + esc(tr('Touche programmée : cachée aux autres programmes')) + '">' + esc(tr('cachée')) + '</span>' : '<span class="hid"></span>')
       + '<span class="codes" title="' + esc(codes) + '">' + esc(codes) + '</span></div>');
     log.append(line);
     st.lineCount++;

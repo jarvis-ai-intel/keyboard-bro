@@ -142,7 +142,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* ---------- Grille principale ---------- */
 .main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-.row-top { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; height: 336px; flex-shrink: 0; }
+.row-top { display: grid; grid-template-columns: minmax(0, 1fr) 528px; gap: 12px; height: 336px; flex-shrink: 0; }
 .row-steps { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 270px; gap: 12px; }
 
 /* ---------- Carte du clavier ---------- */
@@ -208,14 +208,15 @@ button:disabled { cursor: default; opacity: .5; }
 .term-tools { display: flex; gap: 8px; }
 .check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #C4CAD4; cursor: pointer; }
 .check input { width: 15px; height: 15px; margin: 0; accent-color: #6C86F0; }
-.log { flex: 1; min-height: 0; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.7; padding: 8px 12px; color: var(--term-text); }
+.log { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3A4150 transparent; font-family: var(--mono); font-size: 12px; line-height: 1.7; padding: 8px 12px; color: var(--term-text); }
 .log .line { display: flex; gap: 10px; white-space: nowrap; overflow: hidden; }
 /* Ligne trop longue : le nom de la macro passe avant les codes (coupés avec « … », texte complet au survol) */
 .log .line > span { flex-shrink: 0; }
 .log .up { opacity: .5; }
 .log .t { color: var(--term-dim); }
-.log .tag { color: var(--c); min-width: 70px; overflow: hidden; text-overflow: ellipsis; }
-.log .k { min-width: 64px; color: #FFFFFF; font-weight: 600; }
+/* Colonnes alignées : heure · clavier · touche · ↓ · codes (528 px : la ligne la plus longue des 4 langues + la barre de défilement) */
+.log .tag { color: var(--c); min-width: 12ch; }
+.log .k { min-width: 10ch; color: #FFFFFF; font-weight: 600; }
 .log .line > .codes { color: var(--term-dim); flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .log .empty { color: var(--term-dim); font-family: var(--font); white-space: normal; line-height: 1.5; }
 
@@ -405,7 +406,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 /* Macro lancée : son nom passe sur une 2e ligne, sous la touche */
 .log .line > .fire, .log .line > .skip { order: 2; flex: 1 0 100%; min-width: 0; padding-left: calc(8ch + 10px); overflow: hidden; text-overflow: ellipsis; }
 .log .skip { color: #F2D26D; }
-.log .hid { color: var(--term-dim); font-style: italic; }
+.log .hid { color: var(--term-dim); font-style: italic; min-width: 6ch; }
 
 /* ---------- Réglages ---------- */
 .ic-gear { background: var(--panel); color: var(--muted); }

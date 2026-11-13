@@ -1,7 +1,7 @@
 {
   "name": "keyboard-bro",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Keyboard Bro — un 2e clavier pour tes macros",
   "scripts": {
     "tauri": "tauri",
