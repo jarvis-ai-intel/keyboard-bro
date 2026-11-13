@@ -1,12 +1,13 @@
 // =====================================================================
-//  Keyboard Bro — l'interface (version 0.2)
+//  Keyboard Bro — l'interface (version 0.4)
 //
 //  En haut : le dessin du clavier (à gauche) et le terminal en direct (à droite).
 //  En bas  : Étape 1 (choisir la touche), Étape 2 (ce que fait la touche),
 //            Étape 3 (sauvegarde automatique, exporter, importer).
 //
 //  La configuration est gardée dans keyboard-bro.json (voir src-tauri/src/config.rs).
-//  Les touches ne déclenchent PAS encore leurs actions : ça arrive à la prochaine étape.
+//  Les touches programmées sont envoyées au cœur du programme (set_bindings) : sous
+//  Windows, il les cache aux autres programmes et lance leurs actions.
 // =====================================================================
 'use strict';
 
@@ -174,6 +175,7 @@
   }
 
   function changed() {
+    pushBindings();
     saveState = 'pending';
     paintSave();
     clearTimeout(saveTimer);
@@ -221,7 +223,9 @@
     showUp: false,
     lineCount: 0,
     dialog: false,
-    lastG: {}             // id clavier → moment de la dernière touche G (G710)
+    lastG: {},            // id clavier → moment de la dernière touche G (G710)
+    macrosOn: true,       // « Désactiver les macros » : le clavier redevient normal
+    status: null          // état des macros dans le cœur du programme (blocage, nombre de touches)
   };
 
   const byId = (id) => st.keyboards.find((k) => k.id === id);
@@ -265,6 +269,7 @@
     conf.bank = bank;
     syncLeds(kb);
     if (was === bank) return;
+    pushBindings();
     changed();
     if (kb.id === st.selected) { renderCard(kb); renderSteps(); }
     toast('Banque ' + bank + ' : les touches G1 à G6 ont maintenant les actions de ' + bank + '.');
@@ -318,6 +323,7 @@
       const first = macroKeyboards()[0] || st.keyboards.find((k) => isShown(k) && isPrincipal(k));
       st.selected = first ? first.id : 'empty';
     }
+    pushBindings();
     renderAll();
   }
 
@@ -325,6 +331,69 @@
     if (st.selected === id) return;
     st.selected = id;
     renderAll();
+  }
+
+  // =====================================================================
+  //  Macros : touches programmées envoyées au cœur du programme
+  // =====================================================================
+  /** Toutes les touches programmées des claviers à macros branchés (banque active pour le G710). */
+  function buildBindings() {
+    const out = [];
+    st.keyboards.filter((kb) => isShown(kb) && macrosAllowed(kb)).forEach((kb) => {
+      const conf = cfg.keyboards[cfgKey(kb)];
+      if (!conf) return;
+      Object.entries(conf.keys).forEach(([sid, entry]) => {
+        if (!entry.actions.length) return;
+        let kid = sid;
+        const m = /^(M[1-3]):(.+)$/.exec(sid);
+        if (m) { if (!hasBanks(kb) || m[1] !== bankOf(kb)) return; kid = m[2]; }
+        if (hasBanks(kb) && BANKS.includes(kid)) return; // M1-M3 changent de banque
+        const raw = KBKeymap.toRaw(kid);
+        if (!raw) return;
+        out.push({ device: kb.id, vk: raw.vk, make: raw.make, e0: raw.e0, special: raw.special, name: displayName(entry), actions: entry.actions });
+      });
+    });
+    return out;
+  }
+  let pushTimer = null;
+  function pushBindings() {
+    if (!invoke || !st.live) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(async () => {
+      try { st.status = await invoke('set_bindings', { bindings: buildBindings(), enabled: st.macrosOn }); }
+      catch (e) { st.status = { blocking: false, enabled: st.macrosOn, count: 0, message: String(e) }; }
+      paintMacros();
+    }, 60);
+  }
+  /** Bouton en haut à droite + petit état à l'étape 2. */
+  function paintMacros() {
+    const btn = $('macros-btn');
+    if (!st.live) { btn.hidden = true; return; }
+    const s = st.status || { blocking: true, enabled: st.macrosOn, count: 0, message: '' };
+    btn.hidden = false;
+    let cls = 'on', text = 'Macros en marche';
+    if (!st.macrosOn) { cls = 'off'; text = 'Macros désactivées'; }
+    else if (!s.blocking) { cls = 'warn'; text = 'Macros en marche · sans blocage'; }
+    if (st.macrosOn && s.count) text += ' · ' + s.count + (s.count > 1 ? ' touches' : ' touche');
+    btn.className = 'macros-btn ' + cls;
+    btn.innerHTML = '<i></i><span>' + esc(text) + '</span>';
+    btn.setAttribute('aria-pressed', String(!st.macrosOn));
+    btn.title = st.macrosOn
+      ? 'Clique pour désactiver les macros : le clavier à macros redevient un clavier normal (F1 fait F1, etc.).'
+        + (s.blocking ? '' : '\n\nAttention : ' + (s.message || 'les touches programmées ne peuvent pas être cachées') + '. Les macros partent quand même, mais la touche fait aussi son travail normal.')
+      : 'Les macros sont désactivées : chaque touche fait son travail normal. Clique pour les rallumer.';
+    const live = document.querySelector('.live-state');
+    if (live) {
+      live.className = 'live-state ' + cls;
+      live.textContent = !st.macrosOn ? 'Macros désactivées (bouton en haut à droite)'
+        : 'En marche : essaie la touche dans un autre programme';
+    }
+  }
+  function toggleMacros() {
+    st.macrosOn = !st.macrosOn;
+    pushBindings();
+    paintMacros();
+    toast(st.macrosOn ? 'Macros rallumées : les touches programmées lancent leurs actions.' : 'Macros désactivées : le clavier redevient un clavier normal (F1 fait F1, etc.).');
   }
 
   // =====================================================================
@@ -623,7 +692,7 @@
     let s2 = '<section class="card step">'
       + '<div class="step-head"><span class="num">2</span><h2>Ce que fait la touche</h2>'
       + (ek ? '<input id="macro-name" class="name-input" maxlength="60" placeholder="Nom de la macro (ex. Note rapide)" aria-label="Nom de la macro" value="' + esc(entry ? entry.name : '') + '">' : '')
-      + '<span class="spacer"></span><span class="soon" title="Les macros se déclencheront quand le blocage des touches sera ajouté (prochaine étape).">Aperçu : la touche ne déclenche pas encore ses actions</span></div>';
+      + '<span class="spacer"></span>' + (st.live ? '<span class="live-state" title="Les macros ne partent pas quand Keyboard Bro est la fenêtre active : tu peux choisir et essayer tes touches ici en paix. Clique dans un autre programme (ou sur le bureau), puis appuie sur la touche."></span>' : '<span class="soon">Mode démonstration : les touches ne lancent rien</span>') + '</div>';
     if (!ek) {
       s2 += '<div class="placeholder">Choisis d’abord une touche à l’étape 1.</div>';
     } else {
@@ -658,6 +727,7 @@
 
     steps.innerHTML = s1 + s2 + s3;
     paintSave();
+    paintMacros();
 
     const name = $('macro-name');
     if (name) {
@@ -780,6 +850,8 @@
     const line = frag('<div class="line' + (ev.down ? '' : ' up') + '"><span class="t">' + clock(new Date()) + '</span>'
       + '<span class="tag" style="--c:' + color + '">' + esc(titleOf(kb)) + '</span>'
       + '<span class="k">' + esc(keyLabel(kid)) + '</span><span>' + (ev.down ? '↓' : '↑') + '</span>'
+      + (ev.fired ? '<span class="' + (ev.skipped ? 'skip' : 'fire') + '" title="' + esc(ev.skipped ? 'Pas lancée : ' + ev.skipped : 'Macro lancée') + '">→ ' + esc(ev.fired) + (ev.skipped ? ' (pas lancée)' : '') + '</span>' : '')
+      + (ev.blocked && !ev.fired && ev.down ? '<span class="hid" title="Touche programmée : cachée aux autres programmes">cachée</span>' : '')
       + '<span class="codes">' + esc(codes) + '</span></div>');
     log.append(line);
     st.lineCount++;
@@ -806,6 +878,10 @@
     const repeat = ev.down && kid && down.has(kid);
     if (kid) { if (ev.down) down.add(kid); else down.delete(kid); }
     if (!repeat) logKey(ev, kid);
+    if (ev.down && ev.fired && ev.skipped && Date.now() - (st.skipToast || 0) > 6000) {
+      st.skipToast = Date.now();
+      toast('« ' + ev.fired + ' » n’est pas lancée quand Keyboard Bro est la fenêtre active. Clique dans un autre programme (ex. le bureau), puis appuie sur la touche.');
+    }
 
     const kb = byId(ev.device);
     const busy = st.dialog || isTyping(document.activeElement);
@@ -1178,7 +1254,11 @@
   async function startLive() {
     await listen('kb-devices', (e) => setKeyboards(e.payload));
     await listen('kb-key', (e) => onKey(e.payload, e.payload.key || KBKeymap.fromRaw(e.payload)));
+    await listen('kb-notice', (e) => { if (e.payload && e.payload.text) toast(e.payload.text, !e.payload.ok); });
     setKeyboards(await invoke('list_keyboards'));
+    try { st.status = await invoke('macro_status'); } catch { st.status = null; }
+    paintMacros();
+    if (st.status && !st.status.blocking && st.status.message) banner('Les touches programmées ne peuvent pas être cachées aux autres programmes : ' + st.status.message + ' Les macros partent quand même, mais la touche fait aussi son travail normal.');
   }
 
   function startDemo(info) {
@@ -1204,7 +1284,8 @@
     paintSave();
     logEmpty();
     if (st.live) {
-      $('mode-pill').textContent = 'Configuration · rien n’est encore bloqué';
+      $('mode-pill').hidden = true;
+      $('macros-btn').addEventListener('click', toggleMacros);
       try { await startLive(); } catch (err) { banner('Erreur au démarrage : ' + err); }
     } else {
       startDemo(info);

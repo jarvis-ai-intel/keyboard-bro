@@ -1,20 +1,23 @@
 // =====================================================================
 //  Keyboard Bro — le cœur du programme
 //
-//  Version 0.3 :
+//  Version 0.4 :
 //  - lecture des claviers (nom, fabricant, VID/PID, touches en direct);
 //  - touches multimédia, et touches G1-G6 / M1-M3 / MR du Logitech G710+;
 //  - configuration des touches (étapes 1-2-3), sauvegardée dans keyboard-bro.json;
-//  - les touches ne déclenchent PAS encore leurs actions : rien n'est bloqué.
+//  - les touches programmées du clavier à macros sont cachées aux autres programmes
+//    et lancent leurs actions (module « macros »).
 //
 //  L'interface (dossier « ui ») parle au cœur par :
-//  - des commandes (list_keyboards, load_config, save_config, list_browsers…);
-//  - des événements : « kb-key » (une touche) et « kb-devices » (la liste des claviers a changé).
+//  - des commandes (list_keyboards, set_bindings, load_config, save_config, list_browsers…);
+//  - des événements : « kb-key » (une touche), « kb-devices » (la liste des claviers a changé),
+//    « kb-notice » (un message, ex. une macro qui n'a pas marché).
 // =====================================================================
 
 mod browsers;
 mod config;
 mod input;
+mod macros;
 
 use tauri::{Emitter, Manager, PhysicalSize};
 
@@ -41,6 +44,19 @@ fn g710_separate(device: String) -> Result<u32, String> {
 #[tauri::command]
 fn g710_leds(device: String, mask: u8) -> Result<u32, String> {
     input::g710_feature(&device, &[0x06, mask & 0xF0])
+}
+
+/// Les touches programmées (calculées par l'interface) et l'interrupteur « macros allumées ».
+#[tauri::command]
+fn set_bindings(bindings: Vec<input::Binding>, enabled: bool) -> input::MacroStatus {
+    input::set_bindings(bindings, enabled);
+    input::macro_status()
+}
+
+/// Les macros marchent-elles ? (blocage des touches installé ou non)
+#[tauri::command]
+fn macro_status() -> input::MacroStatus {
+    input::macro_status()
 }
 
 /// Informations sur l'ordinateur.
@@ -76,8 +92,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             size_window(app);
+            let notice = app.handle().clone();
+            macros::set_notify(move |ok, text| {
+                let _ = notice.emit("kb-notice", serde_json::json!({ "ok": ok, "text": text }));
+            });
             let handle = app.handle().clone();
             input::start(move |event| match event {
+                input::Event::Fire(name, actions) => macros::run(name, actions),
                 input::Event::Key(key) => {
                     let _ = handle.emit("kb-key", key);
                 }
@@ -92,6 +113,8 @@ pub fn run() {
             platform_info,
             g710_separate,
             g710_leds,
+            set_bindings,
+            macro_status,
             config::load_config,
             config::save_config,
             config::backup_config,

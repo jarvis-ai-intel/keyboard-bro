@@ -1,6 +1,8 @@
 # =====================================================================
 #  Fabrique Keyboard Bro automatiquement, à chaque envoi de code sur GitHub.
 #  Résultat : onglet « Actions » du dépôt → dernière exécution → « Artifacts » (en bas).
+#  Le numéro de version (src-tauri/tauri.conf.json) est dans le nom de chaque fichier,
+#  ex. KeyboardBro-0.4.0-portable-Windows-x64.exe
 #   - Windows x64   : version portable (.exe seul) + installateur
 #   - Windows ARM64 : version portable (.exe seul) + installateur
 #   - Mac (puces Apple) : application en .zip (non signée : clic droit › Ouvrir la 1re fois)
@@ -35,6 +37,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Lire le numéro de version
+        id: version
+        shell: bash
+        run: echo "v=$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -61,8 +68,9 @@ jobs:
           New-Item -ItemType Directory -Force out | Out-Null
           $release = "src-tauri/target/${{ matrix.target }}/release"
           $exe = Get-ChildItem "$release/*.exe" | Select-Object -First 1
-          Copy-Item $exe.FullName "out/KeyboardBro-portable-${{ matrix.name }}.exe"
-          Copy-Item "$release/bundle/nsis/*.exe" out/
+          Copy-Item $exe.FullName "out/KeyboardBro-${{ steps.version.outputs.v }}-portable-${{ matrix.name }}.exe"
+          $setup = Get-ChildItem "$release/bundle/nsis/*.exe" | Select-Object -First 1
+          Copy-Item $setup.FullName "out/KeyboardBro-${{ steps.version.outputs.v }}-installateur-${{ matrix.name }}.exe"
           Get-ChildItem out
 
       - name: Rassembler les fichiers (Mac)
@@ -70,11 +78,11 @@ jobs:
         run: |
           mkdir -p out
           cd "src-tauri/target/${{ matrix.target }}/release/bundle/macos"
-          ditto -c -k --keepParent "Keyboard Bro.app" "$GITHUB_WORKSPACE/out/KeyboardBro-${{ matrix.name }}.zip"
+          ditto -c -k --keepParent "Keyboard Bro.app" "$GITHUB_WORKSPACE/out/KeyboardBro-${{ steps.version.outputs.v }}-${{ matrix.name }}.zip"
           ls -la "$GITHUB_WORKSPACE/out"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: KeyboardBro-${{ matrix.name }}
+          name: KeyboardBro-${{ steps.version.outputs.v }}-${{ matrix.name }}
           path: out/*
           if-no-files-found: error

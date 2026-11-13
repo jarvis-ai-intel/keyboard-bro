@@ -1,0 +1,22 @@
+[package]
+name = "kbhook"
+version = "0.4.0"
+description = "Keyboard Bro — petit DLL qui demande s'il faut bloquer une touche du clavier à macros"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+strip = true
+codegen-units = 1
+
+# Ce DLL est construit à part (par src-tauri/build.rs), jamais avec le programme principal.
+[workspace]

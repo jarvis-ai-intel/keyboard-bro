@@ -67,5 +67,20 @@ const KBKeymap = (() => {
     return n.toString(16).toUpperCase().padStart(width, '0');
   }
 
-  return { fromRaw, fromCode, hex };
+  // Le contraire de fromRaw : ce que Windows enverra pour cette touche du dessin.
+  // Les touches du tableau VK sont reconnues par leur code virtuel, les autres par leur position.
+  const BACK = {};
+  Object.entries(SCAN).forEach(([m, id]) => { BACK[id] = { vk: 0, make: Number(m), e0: false }; });
+  Object.entries(SCAN_E0).forEach(([m, id]) => { BACK[id] = { vk: 0, make: Number(m), e0: true }; });
+  Object.entries(VK).forEach(([v, id]) => { BACK[id] = { vk: Number(v), make: 0, e0: false }; });
+  // Touches qui n'arrivent pas comme des touches ordinaires (lues à part par Keyboard Bro).
+  const SPECIAL = new Set(['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'VolUp', 'VolDn', 'Mute', 'Play', 'Next', 'Prev', 'Stop', 'Calc', 'Mail', 'WebHome']);
+
+  function toRaw(id) {
+    const r = BACK[id] ? Object.assign({}, BACK[id]) : { vk: 0, make: 0, e0: false };
+    r.special = SPECIAL.has(id) ? id : '';
+    return r.vk || r.make || r.special ? r : null;
+  }
+
+  return { fromRaw, fromCode, toRaw, hex };
 })();

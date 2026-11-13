@@ -5,9 +5,13 @@
 //  - Windows : « Raw Input » (fichier windows.rs), sans pilote ni droits d'administrateur.
 //  - Mac et Linux : à venir (IOHIDManager sur Mac, evdev sur Linux).
 //    En attendant, l'interface passe en mode démonstration.
+//
+//  Depuis la version 0.4, Windows bloque aussi les touches programmées du clavier
+//  à macros (pour que F1 lance la macro au lieu de faire F1), et prévient le
+//  cœur du programme quand une macro doit partir (Event::Fire).
 // =====================================================================
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Un clavier physique branché à l'ordinateur.
 #[derive(Clone, Debug, Serialize)]
@@ -53,19 +57,65 @@ pub struct KeyEvent {
     pub key: Option<String>,
     /// Description des codes pour le terminal (ex. « G710 · rapport 03 »).
     pub code: Option<String>,
+    /// Nom de la macro déclenchée par cette touche (appuyée), s'il y en a une.
+    pub fired: Option<String>,
+    /// true = la touche a été cachée aux autres programmes (c'est une touche programmée).
+    pub blocked: bool,
+    /// Pourquoi la macro n'est pas partie (ex. « Keyboard Bro est la fenêtre active »).
+    pub skipped: Option<String>,
+}
+
+/// Une touche programmée, envoyée par l'interface.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Debug, Deserialize)]
+pub struct Binding {
+    /// Clavier (voir Keyboard::id).
+    pub device: String,
+    /// Reconnaissance par code virtuel (Pause, Verr. Num, touches multimédia…), 0 sinon.
+    #[serde(default)]
+    pub vk: u16,
+    /// Reconnaissance par position (scan code), la plupart des touches.
+    #[serde(default)]
+    pub make: u16,
+    #[serde(default)]
+    pub e0: bool,
+    /// Touche spéciale lue autrement (« G1 », « VolUp »…), vide sinon.
+    #[serde(default)]
+    pub special: String,
+    /// Nom affiché de la macro.
+    #[serde(default)]
+    pub name: String,
+    /// Les actions, dans l'ordre (même format que keyboard-bro.json).
+    #[serde(default)]
+    pub actions: Vec<serde_json::Value>,
+}
+
+/// État des macros, pour l'interface.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct MacroStatus {
+    /// true = les touches programmées sont bien cachées aux autres programmes.
+    pub blocking: bool,
+    /// true = les macros sont allumées (pas « désactivées »).
+    pub enabled: bool,
+    /// Nombre de touches programmées actives.
+    pub count: usize,
+    /// Explication (surtout en cas de problème).
+    pub message: String,
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
 pub enum Event {
     Key(KeyEvent),
     Devices(Vec<Keyboard>),
+    /// Une macro doit partir : son nom et ses actions.
+    Fire(String, Vec<serde_json::Value>),
 }
 
 #[cfg(windows)]
 mod windows;
 
 #[cfg(windows)]
-pub use self::windows::{g710_feature, list, start};
+pub use self::windows::{g710_feature, list, macro_status, set_bindings, start};
 
 #[cfg(windows)]
 pub const LIVE: bool = true;
@@ -79,6 +129,24 @@ pub fn start<F: Fn(Event) + Send + Sync + 'static>(_sink: F) {}
 #[cfg(not(windows))]
 pub fn list() -> Vec<Keyboard> {
     Vec::new()
+}
+
+#[cfg(not(windows))]
+pub fn set_bindings(_list: Vec<Binding>, _enabled: bool) {}
+
+#[cfg(not(windows))]
+pub fn macro_status() -> MacroStatus {
+    MacroStatus { message: "Les macros marchent sous Windows seulement pour l'instant.".into(), ..Default::default() }
+}
+
+/// La touche `b` correspond-elle à ce que Windows a envoyé ?
+#[allow(dead_code)]
+pub fn matches(b: &Binding, make: u16, e0: bool, vk: u16) -> bool {
+    if b.vk != 0 {
+        vk == b.vk
+    } else {
+        b.make != 0 && make == b.make && e0 == b.e0
+    }
 }
 
 #[cfg(not(windows))]
@@ -215,6 +283,19 @@ mod tests {
         let names: Vec<_> = (0..10).filter(|b| bits & (1 << b) != 0).map(|b| G710_KEYS[b]).collect();
         assert_eq!(names, vec!["G1", "M2"]);
         assert_eq!(g710_pressed(&[0x02, 1, 0, 0]), None);
+    }
+
+    #[test]
+    fn binding_match() {
+        let mk = |vk, make, e0| Binding { device: "x".into(), vk, make, e0, special: String::new(), name: String::new(), actions: vec![] };
+        // F1 : scan 0x3B
+        assert!(matches(&mk(0, 0x3B, false), 0x3B, false, 0x70));
+        assert!(!matches(&mk(0, 0x3B, false), 0x3B, true, 0x70));
+        // Pause : par code virtuel
+        assert!(matches(&mk(0x13, 0, false), 0x45, false, 0x13));
+        assert!(!matches(&mk(0x13, 0, false), 0x45, false, 0x90));
+        // Rien de programmé
+        assert!(!matches(&mk(0, 0, false), 0, false, 0));
     }
 
     #[test]

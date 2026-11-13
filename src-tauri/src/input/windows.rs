@@ -14,14 +14,27 @@
 //
 //  Une petite fenêtre invisible (« message-only ») reçoit les messages WM_INPUT
 //  dans son propre fil d'exécution (thread), pour ne jamais ralentir l'interface.
-//  Rien n'est bloqué : c'est de la lecture seulement.
+//
+//  Blocage des touches programmées (version 0.4, même technique que le prototype 2) :
+//  Raw Input dit QUEL clavier a envoyé la touche, mais ne peut pas l'arrêter.
+//  Le petit DLL kbhook.dll (dossier « kbhook ») est chargé par Windows dans les
+//  programmes qui reçoivent le clavier; pour chaque touche, il demande à cette
+//  fenêtre invisible (message « KeyboardBro.Query.v1 ») s'il faut la cacher.
+//  On retrouve la touche dans la liste des touches lues par Raw Input (même scan
+//  code, même sens, moins d'une seconde) : si elle vient d'une touche programmée
+//  du clavier à macros, on répond 1 (cachée). Sinon 0 : la touche passe.
 // =====================================================================
 
-use super::{consumer_name, g710_pressed, model_of, parse_ids, vendor_name, Event, KeyEvent, Keyboard, G710_KEYS};
-use std::collections::HashMap;
+use super::{
+    consumer_name, g710_pressed, matches, model_of, parse_ids, vendor_name, Binding, Event, KeyEvent, Keyboard,
+    MacroStatus, G710_KEYS,
+};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::mem::{size_of, zeroed};
 use std::ptr::{null, null_mut};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
     CM_Get_DevNode_PropertyW, CM_Get_Device_IDW, CM_Get_Parent, CM_Locate_DevNodeW,
@@ -36,10 +49,11 @@ use windows_sys::Win32::Devices::Properties::{
     DEVPROPKEY, DEVPROP_TYPE_STRING,
 };
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, WPARAM,
+    CloseHandle, GetLastError, GENERIC_READ, GENERIC_WRITE, HANDLE, HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, WPARAM,
 };
 use windows_sys::Win32::Storage::FileSystem::{CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
-use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 use windows_sys::Win32::UI::Input::{
     GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, RegisterRawInputDevices,
     HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RID_DEVICE_INFO,
@@ -47,8 +61,9 @@ use windows_sys::Win32::UI::Input::{
     RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD, RIM_TYPEMOUSE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
-    TranslateMessage, HWND_MESSAGE, MSG, RI_KEY_BREAK, RI_KEY_E0, RI_KEY_E1, WM_INPUT,
+    ChangeWindowMessageFilterEx, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
+    GetWindowThreadProcessId, PeekMessageW, RegisterClassW, RegisterWindowMessageW, SetWindowsHookExW, TranslateMessage,
+    HOOKPROC, HWND_MESSAGE, MSG, MSGFLT_ALLOW, PM_REMOVE, RI_KEY_BREAK, RI_KEY_E0, RI_KEY_E1, WH_KEYBOARD, WM_INPUT,
     WM_INPUT_DEVICE_CHANGE, WNDCLASSW,
 };
 
@@ -134,6 +149,7 @@ unsafe fn message_loop() {
         hwndTarget: hwnd,
     };
     if RegisterRawInputDevices(&keyboard, 1, item) == 0 {
+        set_status(false, "Windows a refusé de laisser lire les claviers.".into());
         return;
     }
     // Facultatifs (si Windows refuse, les touches ordinaires marchent quand même) :
@@ -148,6 +164,12 @@ unsafe fn message_loop() {
 
     send(Event::Devices(list()));
 
+    // Blocage des touches programmées (le DLL demande à cette fenêtre).
+    match install_hook(hwnd) {
+        Ok(()) => set_status(true, String::new()),
+        Err(e) => set_status(false, e),
+    }
+
     let mut msg: MSG = zeroed();
     while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
         TranslateMessage(&msg);
@@ -156,6 +178,10 @@ unsafe fn message_loop() {
 }
 
 unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    let query = QUERY.load(Ordering::Relaxed);
+    if query != 0 && msg == query {
+        return on_query(hwnd, wparam, lparam);
+    }
     match msg {
         WM_INPUT => on_input(lparam as HRAWINPUT),
         WM_INPUT_DEVICE_CHANGE => {
@@ -197,17 +223,212 @@ unsafe fn on_input(handle: HRAWINPUT) {
         return;
     }
     let flags = key.Flags as u32;
+    let device = group_of(raw.header.hDevice);
+    let e0 = flags & RI_KEY_E0 != 0;
+    let down = flags & RI_KEY_BREAK == 0;
+    let d = decide(&device, Some((key.MakeCode, e0, key.VKey)), None, down);
+    remember(key.MakeCode, e0, key.VKey, down, d.blocked);
     send(Event::Key(KeyEvent {
-        device: group_of(raw.header.hDevice),
+        device,
         vkey: key.VKey,
         make: key.MakeCode,
-        e0: flags & RI_KEY_E0 != 0,
+        e0,
         e1: flags & RI_KEY_E1 != 0,
-        down: flags & RI_KEY_BREAK == 0,
+        down,
         key: None,
         code: None,
+        fired: d.fired,
+        blocked: d.blocked,
+        skipped: d.skipped,
     }));
 }
+
+// ---------------------------------------------------------------------
+//  Touches programmées : quelle macro, faut-il cacher la touche ?
+// ---------------------------------------------------------------------
+
+struct Engine {
+    enabled: bool,
+    list: Vec<Binding>,
+    /// Touches programmées tenues enfoncées (pour ignorer la répétition automatique).
+    held: HashSet<(String, u16, bool, u16, String)>,
+    /// Dernier départ de chaque macro (une touche multimédia arrive parfois deux fois).
+    last: HashMap<usize, Instant>,
+}
+
+static ENGINE: OnceLock<Mutex<Engine>> = OnceLock::new();
+static STATUS: OnceLock<Mutex<MacroStatus>> = OnceLock::new();
+
+fn engine() -> &'static Mutex<Engine> {
+    ENGINE.get_or_init(|| Mutex::new(Engine { enabled: true, list: Vec::new(), held: HashSet::new(), last: HashMap::new() }))
+}
+
+fn status_cell() -> &'static Mutex<MacroStatus> {
+    STATUS.get_or_init(|| Mutex::new(MacroStatus { message: "Démarrage…".into(), ..Default::default() }))
+}
+
+fn set_status(blocking: bool, message: String) {
+    if let Ok(mut s) = status_cell().lock() {
+        s.blocking = blocking;
+        s.message = message;
+    }
+}
+
+/// L'interface envoie la liste des touches programmées (et si les macros sont allumées).
+pub fn set_bindings(list: Vec<Binding>, enabled: bool) {
+    if let Ok(mut e) = engine().lock() {
+        let keep: Vec<Binding> = list.into_iter().filter(|b| !b.actions.is_empty()).collect();
+        e.enabled = enabled;
+        e.list = keep;
+        e.held.clear();
+        e.last.clear();
+    }
+}
+
+pub fn macro_status() -> MacroStatus {
+    let mut s = status_cell().lock().map(|s| s.clone()).unwrap_or_default();
+    if let Ok(e) = engine().lock() {
+        s.enabled = e.enabled;
+        s.count = e.list.len();
+    }
+    s
+}
+
+#[derive(Default)]
+struct Decision {
+    fired: Option<String>,
+    blocked: bool,
+    skipped: Option<String>,
+}
+
+/// Keyboard Bro lui-même est-il la fenêtre active ? (on ne lance pas de macro dans sa propre fenêtre)
+unsafe fn own_window_active() -> bool {
+    let fg = GetForegroundWindow();
+    if fg.is_null() {
+        return false;
+    }
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(fg, &mut pid);
+    pid == GetCurrentProcessId()
+}
+
+/// `raw` = touche ordinaire (scan, E0, VK); `special` = touche lue autrement (« G1 », « VolUp »…).
+unsafe fn decide(device: &str, raw: Option<(u16, bool, u16)>, special: Option<&str>, down: bool) -> Decision {
+    let mut out = Decision::default();
+    if device == "simule" {
+        return out;
+    }
+    let fire = {
+        let Ok(mut e) = engine().lock() else { return out };
+        if !e.enabled {
+            return out;
+        }
+        let found = e.list.iter().position(|b| {
+            b.device == device
+                && (raw.map(|(m, x, v)| matches(b, m, x, v)).unwrap_or(false)
+                    || special.map(|n| !b.special.is_empty() && b.special == n).unwrap_or(false))
+        });
+        let Some(i) = found else { return out };
+        // Une touche spéciale (G1, multimédia) n'a pas de message clavier à cacher.
+        out.blocked = raw.is_some();
+        let (m, x, v) = raw.unwrap_or((0, false, 0));
+        let id = (device.to_string(), m, x, v, special.unwrap_or("").to_string());
+        if !down {
+            e.held.remove(&id);
+            return out;
+        }
+        if !e.held.insert(id) {
+            return out; // répétition automatique : la touche reste cachée, la macro ne repart pas
+        }
+        let now = Instant::now();
+        if e.last.get(&i).map(|t| now.duration_since(*t) < Duration::from_millis(150)).unwrap_or(false) {
+            return out;
+        }
+        e.last.insert(i, now);
+        let b = &e.list[i];
+        let name = if b.name.trim().is_empty() { "Macro".to_string() } else { b.name.clone() };
+        (name, b.actions.clone())
+    };
+    out.fired = Some(fire.0.clone());
+    if own_window_active() {
+        out.skipped = Some("Keyboard Bro est la fenêtre active".into());
+    } else {
+        send(Event::Fire(fire.0, fire.1));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------
+//  Questions du DLL : « faut-il cacher cette touche ? »
+// ---------------------------------------------------------------------
+
+/// Message « KeyboardBro.Query.v1 ».
+static QUERY: AtomicU32 = AtomicU32::new(0);
+
+struct Seen {
+    make: u16,
+    e0: bool,
+    vk: u16,
+    down: bool,
+    block: bool,
+    at: Instant,
+    used: bool,
+}
+
+static SEEN: OnceLock<Mutex<VecDeque<Seen>>> = OnceLock::new();
+
+fn seen() -> &'static Mutex<VecDeque<Seen>> {
+    SEEN.get_or_init(|| Mutex::new(VecDeque::with_capacity(64)))
+}
+
+/// Garde la touche lue par Raw Input, pour répondre au DLL dans un instant.
+fn remember(make: u16, e0: bool, vk: u16, down: bool, block: bool) {
+    let Ok(mut q) = seen().lock() else { return };
+    let now = Instant::now();
+    while q.front().map(|s| q.len() >= 64 || now.duration_since(s.at) > Duration::from_secs(2)).unwrap_or(false) {
+        q.pop_front();
+    }
+    q.push_back(Seen { make, e0, vk, down, block, at: now, used: false });
+}
+
+/// `wparam` = code virtuel (VK), `lparam` = scan code, E0 et sens, comme Windows les donne au DLL.
+unsafe fn on_query(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // D'abord, lire les touches que Raw Input a déjà en attente pour nous.
+    let mut m: MSG = zeroed();
+    let mut guard = 0;
+    while guard < 64 && PeekMessageW(&mut m, hwnd, WM_INPUT, WM_INPUT, PM_REMOVE) != 0 {
+        DispatchMessageW(&m);
+        guard += 1;
+    }
+    let lp = lparam as usize;
+    let scan = ((lp >> 16) & 0xFF) as u16;
+    let e0 = (lp >> 24) & 1 == 1;
+    let down = (lp >> 31) & 1 == 0;
+    let vk = (wparam & 0xFFFF) as u16;
+    let Ok(mut q) = seen().lock() else { return 0 };
+    let now = Instant::now();
+    let fresh = |s: &Seen| !s.used && s.down == down && now.duration_since(s.at) < Duration::from_secs(1);
+    // 1er essai : même position (scan code + E0). 2e essai : même code virtuel.
+    let mut found = q.iter().position(|s| fresh(s) && s.make == scan && s.e0 == e0);
+    if found.is_none() && vk != 0 {
+        found = q.iter().position(|s| fresh(s) && s.vk == vk);
+    }
+    let Some(i) = found else { return 0 };
+    let hit = (q[i].make, q[i].e0, q[i].down, q[i].block);
+    q[i].used = true;
+    // Les copies plus vieilles de la même touche ne serviront plus.
+    for s in q.iter_mut().take(i) {
+        if !s.used && s.make == hit.0 && s.e0 == hit.1 && s.down == hit.2 {
+            s.used = true;
+        }
+    }
+    if hit.3 {
+        1
+    } else {
+        0
+    }
+}
+
 
 // ---------------------------------------------------------------------
 //  Appareils HID : touches multimédia et touches G du G710
@@ -278,7 +499,11 @@ unsafe fn examine(device: HANDLE) -> HidDevice {
     HidDevice { kind, group: group_id(&path, &v, &p), last_bits: 0, last_usages: Vec::new() }
 }
 
-fn special(device: &str, name: Option<&str>, down: bool, code: String) -> Event {
+unsafe fn special(device: &str, name: Option<&str>, down: bool, code: String) -> Event {
+    let d = match name {
+        Some(n) => decide(device, None, Some(n), down),
+        None => Decision::default(),
+    };
     Event::Key(KeyEvent {
         device: device.to_string(),
         vkey: 0,
@@ -288,6 +513,9 @@ fn special(device: &str, name: Option<&str>, down: bool, code: String) -> Event 
         down,
         key: name.map(str::to_string),
         code: Some(code),
+        fired: d.fired,
+        blocked: d.blocked,
+        skipped: d.skipped,
     })
 }
 
@@ -356,6 +584,76 @@ unsafe fn on_hid(raw: &RAWINPUT, total: usize) {
     for e in events {
         send(e);
     }
+}
+
+// ---------------------------------------------------------------------
+//  Installation du DLL de blocage
+// ---------------------------------------------------------------------
+
+/// Le DLL est rangé dans le programme (voir build.rs), puis copié dans
+/// %LOCALAPPDATA%\com.jarvis.keyboardbro au démarrage : Windows a besoin d'un vrai fichier.
+static HOOK_DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/kbhook.dll"));
+
+fn fnv(bytes: &[u8]) -> u32 {
+    let mut h: u32 = 0x811c9dc5;
+    for b in bytes {
+        h ^= *b as u32;
+        h = h.wrapping_mul(0x01000193);
+    }
+    h
+}
+
+fn extract_dll() -> Result<std::path::PathBuf, String> {
+    if HOOK_DLL.is_empty() {
+        return Err("le DLL de blocage manque dans cette version".into());
+    }
+    let base = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let dir = base.join("com.jarvis.keyboardbro");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("dossier {} impossible à créer ({e})", dir.display()))?;
+    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    let name = format!("kbhook-{}-{}-{:08x}.dll", env!("CARGO_PKG_VERSION"), arch, fnv(HOOK_DLL));
+    let path = dir.join(&name);
+    let same = std::fs::read(&path).map(|b| b == HOOK_DLL).unwrap_or(false);
+    if !same {
+        let tmp = dir.join(format!("{name}.tmp"));
+        std::fs::write(&tmp, HOOK_DLL).map_err(|e| format!("copie du DLL impossible ({e})"))?;
+        std::fs::rename(&tmp, &path).map_err(|e| format!("copie du DLL impossible ({e})"))?;
+    }
+    // Ménage : les DLL des anciennes versions (ceux encore utilisés par un programme restent là).
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let n = entry.file_name().to_string_lossy().to_string();
+            if n.starts_with("kbhook-") && n != name {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok(path)
+}
+
+unsafe fn install_hook(hwnd: HWND) -> Result<(), String> {
+    let query = RegisterWindowMessageW(wide("KeyboardBro.Query.v1").as_ptr());
+    if query == 0 {
+        return Err("Windows a refusé le message de blocage".into());
+    }
+    QUERY.store(query, Ordering::Relaxed);
+    // Les programmes « protégés » (ex. navigateurs) ont le droit de nous poser la question.
+    ChangeWindowMessageFilterEx(hwnd, query, MSGFLT_ALLOW, null_mut());
+
+    let path = extract_dll()?;
+    let module = LoadLibraryW(wide(&path.to_string_lossy()).as_ptr());
+    if module.is_null() {
+        return Err(format!("le DLL de blocage n'a pas pu être chargé (erreur {}). Un antivirus le bloque peut-être.", GetLastError()));
+    }
+    let Some(proc_addr) = GetProcAddress(module, b"KbbKeyboardProc\0".as_ptr()) else {
+        return Err("le DLL de blocage est incomplet".into());
+    };
+    let proc: HOOKPROC = std::mem::transmute(proc_addr);
+    let hook = SetWindowsHookExW(WH_KEYBOARD, proc, module, 0);
+    if hook.is_null() {
+        return Err(format!("Windows a refusé le blocage des touches (erreur {}).", GetLastError()));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------
