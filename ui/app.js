@@ -856,7 +856,7 @@
       + '<span class="k">' + esc(keyLabel(kid)) + '</span><span>' + (ev.down ? '↓' : '↑') + '</span>'
       + (ev.fired ? '<span class="' + (ev.skipped ? 'skip' : 'fire') + '" title="' + esc(ev.skipped ? 'Pas lancée : ' + ev.skipped : 'Macro lancée') + '">→ ' + esc(ev.fired) + (ev.skipped ? ' (pas lancée)' : '') + '</span>' : '')
       + (ev.blocked && !ev.fired && ev.down ? '<span class="hid" title="Touche programmée : cachée aux autres programmes">cachée</span>' : '')
-      + '<span class="codes">' + esc(codes) + '</span></div>');
+      + '<span class="codes" title="' + esc(codes) + '">' + esc(codes) + '</span></div>');
     log.append(line);
     st.lineCount++;
     while (log.childElementCount > MAX_LINES) log.firstElementChild.remove();
