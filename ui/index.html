@@ -11,7 +11,7 @@
 
   <header class="topbar">
     <div class="brand">
-      <img src="logo.png" alt="" width="32" height="32">
+      <img src="logo.png" alt="" width="42" height="42">
       <span>Keyboard Bro</span>
     </div>
     <nav id="tabs" class="tabs" role="tablist" aria-label="Claviers"></nav>
@@ -29,48 +29,49 @@
   <main id="kb-view" class="main">
     <div class="row-top">
       <section class="card kb-card" aria-label="Dessin du clavier">
-        <div class="kb-head">
+        <!-- À gauche : tout ce qui décrit le clavier, sous son nom -->
+        <div class="kb-side">
           <div class="kb-title">
             <div class="eyebrow" id="kb-eyebrow">Clavier</div>
             <h1 id="kb-name">Recherche des claviers…</h1>
             <div class="sub" id="kb-sub"></div>
           </div>
-          <div class="kb-actions">
-            <div class="role-line"><div id="bank" class="bank"></div><div id="role" class="role"></div></div>
-            <label class="field">Disposition
-              <select id="layout-select">
-                <optgroup label="PC / Windows">
-                  <option value="full-ansi">Complet ANSI · 104 touches</option>
-                  <option value="full-iso">Complet ISO · 105 touches (canadien français, européen)</option>
-                  <option value="media">Multimédia · 104 + 9 touches média</option>
-                  <option value="tkl-ansi">Sans pavé numérique ANSI · 87 touches</option>
-                  <option value="tkl-iso">Sans pavé numérique ISO · 88 touches</option>
-                  <option value="c75">Compact 75 % · 84 touches</option>
-                  <option value="c65">Compact 65 % · 68 touches</option>
-                  <option value="c60">Compact 60 % · 61 touches</option>
-                  <option value="pad">Pavé numérique seul · 17 touches</option>
-                </optgroup>
-                <optgroup label="Modèles reconnus">
-                  <option value="g710">Logitech G710 / G710+</option>
-                </optgroup>
-                <optgroup label="Apple / Mac">
-                  <option value="mac-full">Apple avec pavé numérique · F1 à F19</option>
-                  <option value="mac-compact">Apple Magic Keyboard compact · 78 touches</option>
-                </optgroup>
-              </select>
-            </label>
-          </div>
+          <div id="role" class="role"></div>
+          <div id="bank" class="bank"></div>
+          <label class="field-col">Disposition
+            <select id="layout-select" class="layout-select">
+              <optgroup label="PC / Windows">
+                <option value="full-ansi">Complet ANSI · 104 touches</option>
+                <option value="full-iso">Complet ISO · 105 touches (canadien français, européen)</option>
+                <option value="media">Multimédia · 104 + 9 touches média</option>
+                <option value="tkl-ansi">Sans pavé numérique ANSI · 87 touches</option>
+                <option value="tkl-iso">Sans pavé numérique ISO · 88 touches</option>
+                <option value="c75">Compact 75 % · 84 touches</option>
+                <option value="c65">Compact 65 % · 68 touches</option>
+                <option value="c60">Compact 60 % · 61 touches</option>
+                <option value="pad">Pavé numérique seul · 17 touches</option>
+              </optgroup>
+              <optgroup label="Modèles reconnus">
+                <option value="g710">Logitech G710 / G710+</option>
+              </optgroup>
+              <optgroup label="Apple / Mac">
+                <option value="mac-full">Apple avec pavé numérique · F1 à F19</option>
+                <option value="mac-compact">Apple Magic Keyboard compact · 78 touches</option>
+              </optgroup>
+            </select>
+          </label>
+          <span id="layout-hint" class="hint"></span>
         </div>
-        <div id="kb-note" class="note" hidden></div>
-        <div id="kb-wrap" class="kb-wrap"><div id="kb-board" class="kb-board" role="img" aria-label="Dessin du clavier"></div></div>
-        <div class="legend">
-          <div class="legend-items">
+        <!-- À droite : le dessin, collé au terminal, aussi grand que possible -->
+        <div class="kb-main">
+          <div id="kb-note" class="note" hidden></div>
+          <div id="kb-wrap" class="kb-wrap"><div id="kb-board" class="kb-board" role="img" aria-label="Dessin du clavier"></div></div>
+          <div class="legend-items kb-legend">
             <span><i class="sw sw-free"></i>Libre</span>
             <span><i class="sw sw-set"></i>Assignée</span>
             <span><i class="sw sw-edit"></i>En modification</span>
             <span><i class="sw sw-na"></i>Invisible pour Windows</span>
           </div>
-          <span id="layout-hint" class="hint"></span>
         </div>
       </section>
 
@@ -96,9 +97,7 @@
   <!-- Onglet « Clavier vide » -->
   <main id="empty-view" class="main empty-view" hidden>
     <div class="empty-box">
-      <div class="empty-art" aria-hidden="true">
-        <svg width="150" height="60" viewBox="0 0 150 60" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="1" y="1" width="148" height="58" rx="8"></rect><path d="M14 16h10M30 16h10M46 16h10M62 16h10M78 16h10M94 16h10M110 16h10M126 16h10M18 30h10M34 30h10M50 30h10M66 30h10M82 30h10M98 30h10M114 30h18M40 44h70"></path></svg>
-      </div>
+      <img class="mascot mascot-lg" src="logo.png" alt="" width="170" height="170">
       <h1>Aucun autre clavier détecté pour le moment</h1>
       <p>Branche un deuxième clavier (USB ou Bluetooth) : il apparaîtra tout seul dans un nouvel onglet. Tu peux aussi appuyer sur une de ses touches pour aller directement à son onglet.</p>
       <button type="button" id="detect" class="btn btn-primary btn-lg">Détecter un clavier</button>

@@ -120,7 +120,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* ---------- Barre du haut ---------- */
 .topbar { display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: var(--surface); border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-title); font-weight: 700; font-size: 18px; white-space: nowrap; }
-.brand img { border-radius: 8px; }
+.brand img { border-radius: 50%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
 .tabs { display: flex; flex-wrap: nowrap; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; }
 .tab { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--muted); white-space: nowrap; transition: background .15s, box-shadow .3s; }
 .tab:hover { background: var(--panel); }
@@ -142,14 +142,24 @@ button:disabled { cursor: default; opacity: .5; }
 /* ---------- Grille principale ---------- */
 .main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-.row-top { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 12px; height: 336px; flex-shrink: 0; }
+.row-top { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; height: 336px; flex-shrink: 0; }
 .row-steps { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 270px; gap: 12px; }
 
 /* ---------- Carte du clavier ---------- */
-.kb-card { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.kb-card { padding: 14px 14px 14px 16px; display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 16px; min-width: 0; min-height: 0; }
+/* Colonne de gauche : nom, rôle, disposition, légende */
+.kb-side { display: flex; flex-direction: column; gap: 9px; min-width: 0; min-height: 0; overflow: hidden; }
+.kb-side > * { flex-shrink: 0; }
+.kb-legend { justify-content: flex-end; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.kb-side .hint { text-align: left; white-space: normal; font-size: 12px; line-height: 1.45; color: var(--faint); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 0 1 auto; min-height: 0; }
+.kb-side .sub { white-space: normal; line-height: 1.45; }
+.kb-side .role .btn { white-space: normal; text-align: left; }
+.layout-select { min-height: 34px; width: 100%; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13px; color: var(--text); }
+/* Zone de droite : le dessin, aligné contre le terminal */
+.kb-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 .kb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .kb-title { min-width: 0; }
-.kb-title h1 { margin: 2px 0 1px; font-family: var(--font-title); font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-title h1 { margin: 2px 0 1px; font-family: var(--font-title); font-size: 20px; font-weight: 700; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sub { font-size: 12.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .role-line { display: flex; align-items: center; gap: 12px; }
@@ -161,13 +171,14 @@ button:disabled { cursor: default; opacity: .5; }
 .note .btn { margin-left: auto; flex-shrink: 0; min-height: 28px; }
 .key.bank-on { background: var(--ok); color: #FFFFFF; border-color: var(--ok); border-bottom-color: #1F6B3E; font-weight: 700; }
 .key.gkey { font-weight: 600; }
-.role { align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.role { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+.role:empty { display: none; }
 .chip-principal { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; }
 .field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .field select { min-height: 34px; width: 290px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13px; }
 .note { padding: 8px 12px; border-radius: 9px; font-size: 12.5px; line-height: 1.45; background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent-line); }
 .note.warn { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn-line); }
-.kb-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.kb-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; }
 .kb-board { position: relative; }
 .key { position: absolute; box-sizing: border-box; border-radius: 6px; padding: 0 1px; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.05; background: var(--key); color: var(--text); border: 1px solid var(--key-line); border-bottom: 3px solid var(--key-base); cursor: pointer; user-select: none; overflow: hidden; transition: background .12s, transform .06s; }
 .key:hover { border-color: var(--accent-line); }
@@ -274,7 +285,11 @@ button:disabled { cursor: default; opacity: .5; }
 /* ---------- Onglet vide ---------- */
 .empty-view { align-items: center; justify-content: center; }
 .empty-box { max-width: 560px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; }
-.empty-art { width: 210px; height: 112px; border-radius: 16px; border: 2px dashed var(--line-strong); background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--key-base); }
+/* Le logo de Keyboard Bro comme « mascotte » dans les espaces vides */
+.mascot { display: block; border-radius: 50%; filter: drop-shadow(0 4px 10px rgba(0,0,0,.14)); user-select: none; pointer-events: none; }
+.mascot-lg { width: 170px; height: 170px; }
+.mascot-md { width: 120px; height: 120px; }
+.placeholder.with-mascot { flex-direction: column; gap: 14px; }
 .empty-box h1 { margin: 0; font-family: var(--font-title); font-size: 24px; }
 .empty-box p { margin: 0; line-height: 1.6; color: var(--muted); }
 

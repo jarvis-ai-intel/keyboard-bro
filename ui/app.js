@@ -1,5 +1,5 @@
 // =====================================================================
-//  Keyboard Bro — l'interface (version 0.4.1)
+//  Keyboard Bro — l'interface (version 0.4.2)
 //
 //  En haut : le dessin du clavier (à gauche) et le terminal en direct (à droite).
 //  En bas  : Étape 1 (choisir la touche), Étape 2 (ce que fait la touche),
@@ -477,6 +477,7 @@
     const conf = kbConf(kb);
     $('layout-select').value = conf.layout;
     $('layout-hint').textContent = KBLayouts.layoutInfo()[conf.layout] || '';
+    $('layout-hint').title = $('layout-hint').textContent;   // texte complet au survol s'il est coupé
 
     const note = $('kb-note');
     note.className = 'note';
@@ -697,7 +698,7 @@
       + (ek ? '<input id="macro-name" class="name-input" maxlength="60" placeholder="Nom de la macro (ex. Note rapide)" aria-label="Nom de la macro" value="' + esc(entry ? entry.name : '') + '">' : '')
       + '<span class="spacer"></span>' + (st.live ? '<span class="live-state" title="Les macros ne partent pas quand Keyboard Bro est la fenêtre active : tu peux choisir et essayer tes touches ici en paix. Clique dans un autre programme (ou sur le bureau), puis appuie sur la touche."></span>' : '<span class="soon">Mode démonstration : les touches ne lancent rien</span>') + '</div>';
     if (!ek) {
-      s2 += '<div class="placeholder">Choisis d’abord une touche à l’étape 1.</div>';
+      s2 += '<div class="placeholder with-mascot"><img class="mascot mascot-md" src="logo.png" alt="" width="120" height="120">Choisis d’abord une touche à l’étape 1.</div>';
     } else {
       const actions = entry ? entry.actions : [];
       s2 += '<ol class="actions">' + actions.map((a, i) => '<li class="action">'
