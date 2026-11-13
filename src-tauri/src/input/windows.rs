@@ -149,7 +149,7 @@ unsafe fn message_loop() {
         hwndTarget: hwnd,
     };
     if RegisterRawInputDevices(&keyboard, 1, item) == 0 {
-        set_status(false, tr!("Windows a refusé de laisser lire les claviers.", "Windows refused to let the keyboards be read.", "Windows no permitió leer los teclados."));
+        set_status(false, tr!("Windows a refusé de laisser lire les claviers.", "Windows refused to let the keyboards be read.", "Windows no permitió leer los teclados.", "Windows не позволи клавиатурите да бъдат четени."));
         return;
     }
     // Facultatifs (si Windows refuse, les touches ordinaires marchent quand même) :
@@ -351,7 +351,7 @@ unsafe fn decide(device: &str, raw: Option<(u16, bool, u16)>, special: Option<&s
     };
     out.fired = Some(fire.0.clone());
     if own_window_active() {
-        out.skipped = Some(tr!("Keyboard Bro est la fenêtre active", "Keyboard Bro is the active window", "Keyboard Bro es la ventana activa"));
+        out.skipped = Some(tr!("Keyboard Bro est la fenêtre active", "Keyboard Bro is the active window", "Keyboard Bro es la ventana activa", "Keyboard Bro е активният прозорец"));
     } else {
         send(Event::Fire(fire.0, fire.1));
     }
@@ -605,19 +605,19 @@ fn fnv(bytes: &[u8]) -> u32 {
 
 fn extract_dll() -> Result<std::path::PathBuf, String> {
     if HOOK_DLL.is_empty() {
-        return Err(tr!("le DLL de blocage manque dans cette version", "the blocking DLL is missing from this version", "falta la DLL de bloqueo en esta versión"));
+        return Err(tr!("le DLL de blocage manque dans cette version", "the blocking DLL is missing from this version", "falta la DLL de bloqueo en esta versión", "DLL файлът за блокиране липсва в тази версия"));
     }
     let base = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
     let dir = base.join("com.jarvis.keyboardbro");
-    std::fs::create_dir_all(&dir).map_err(|e| { let d = dir.display(); tr!("dossier {d} impossible à créer ({e})", "couldn’t create folder {d} ({e})", "no se pudo crear la carpeta {d} ({e})") })?;
+    std::fs::create_dir_all(&dir).map_err(|e| { let d = dir.display(); tr!("dossier {d} impossible à créer ({e})", "couldn’t create folder {d} ({e})", "no se pudo crear la carpeta {d} ({e})", "папката {d} не може да бъде създадена ({e})") })?;
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
     let name = format!("kbhook-{}-{}-{:08x}.dll", env!("CARGO_PKG_VERSION"), arch, fnv(HOOK_DLL));
     let path = dir.join(&name);
     let same = std::fs::read(&path).map(|b| b == HOOK_DLL).unwrap_or(false);
     if !same {
         let tmp = dir.join(format!("{name}.tmp"));
-        std::fs::write(&tmp, HOOK_DLL).map_err(|e| tr!("copie du DLL impossible ({e})", "couldn’t copy the DLL ({e})", "no se pudo copiar la DLL ({e})"))?;
-        std::fs::rename(&tmp, &path).map_err(|e| tr!("copie du DLL impossible ({e})", "couldn’t copy the DLL ({e})", "no se pudo copiar la DLL ({e})"))?;
+        std::fs::write(&tmp, HOOK_DLL).map_err(|e| tr!("copie du DLL impossible ({e})", "couldn’t copy the DLL ({e})", "no se pudo copiar la DLL ({e})", "DLL файлът не може да бъде копиран ({e})"))?;
+        std::fs::rename(&tmp, &path).map_err(|e| tr!("copie du DLL impossible ({e})", "couldn’t copy the DLL ({e})", "no se pudo copiar la DLL ({e})", "DLL файлът не може да бъде копиран ({e})"))?;
     }
     // Ménage : les DLL des anciennes versions (ceux encore utilisés par un programme restent là).
     if let Ok(entries) = std::fs::read_dir(&dir) {
@@ -634,7 +634,7 @@ fn extract_dll() -> Result<std::path::PathBuf, String> {
 unsafe fn install_hook(hwnd: HWND) -> Result<(), String> {
     let query = RegisterWindowMessageW(wide("KeyboardBro.Query.v1").as_ptr());
     if query == 0 {
-        return Err(tr!("Windows a refusé le message de blocage", "Windows refused the blocking message", "Windows rechazó el mensaje de bloqueo"));
+        return Err(tr!("Windows a refusé le message de blocage", "Windows refused the blocking message", "Windows rechazó el mensaje de bloqueo", "Windows отказа съобщението за блокиране"));
     }
     QUERY.store(query, Ordering::Relaxed);
     // Les programmes « protégés » (ex. navigateurs) ont le droit de nous poser la question.
@@ -644,16 +644,16 @@ unsafe fn install_hook(hwnd: HWND) -> Result<(), String> {
     let module = LoadLibraryW(wide(&path.to_string_lossy()).as_ptr());
     if module.is_null() {
         let code = GetLastError();
-        return Err(tr!("le DLL de blocage n'a pas pu être chargé (erreur {code}). Un antivirus le bloque peut-être.", "the blocking DLL couldn’t be loaded (error {code}). An antivirus may be blocking it.", "no se pudo cargar la DLL de bloqueo (error {code}). Quizá un antivirus la bloquea."));
+        return Err(tr!("le DLL de blocage n'a pas pu être chargé (erreur {code}). Un antivirus le bloque peut-être.", "the blocking DLL couldn’t be loaded (error {code}). An antivirus may be blocking it.", "no se pudo cargar la DLL de bloqueo (error {code}). Quizá un antivirus la bloquea.", "DLL файлът за блокиране не можа да се зареди (грешка {code}). Може би антивирусна програма го блокира."));
     }
     let Some(proc_addr) = GetProcAddress(module, b"KbbKeyboardProc\0".as_ptr()) else {
-        return Err(tr!("le DLL de blocage est incomplet", "the blocking DLL is incomplete", "la DLL de bloqueo está incompleta"));
+        return Err(tr!("le DLL de blocage est incomplet", "the blocking DLL is incomplete", "la DLL de bloqueo está incompleta", "DLL файлът за блокиране е непълен"));
     };
     let proc: HOOKPROC = std::mem::transmute(proc_addr);
     let hook = SetWindowsHookExW(WH_KEYBOARD, proc, module, 0);
     if hook.is_null() {
         let code = GetLastError();
-        return Err(tr!("Windows a refusé le blocage des touches (erreur {code}).", "Windows refused to block the keys (error {code}).", "Windows rechazó el bloqueo de teclas (error {code})."));
+        return Err(tr!("Windows a refusé le blocage des touches (erreur {code}).", "Windows refused to block the keys (error {code}).", "Windows rechazó el bloqueo de teclas (error {code}).", "Windows отказа блокирането на клавишите (грешка {code})."));
     }
     Ok(())
 }
@@ -702,7 +702,7 @@ pub fn g710_feature(device: &str, report: &[u8]) -> Result<u32, String> {
         let mut items: Vec<RAWINPUTDEVICELIST> = vec![zeroed(); count as usize];
         let got = GetRawInputDeviceList(items.as_mut_ptr(), &mut count, item_size);
         if got == u32::MAX {
-            return Err(tr!("liste des appareils illisible", "device list unreadable", "lista de dispositivos ilegible"));
+            return Err(tr!("liste des appareils illisible", "device list unreadable", "lista de dispositivos ilegible", "списъкът с устройства не може да бъде прочетен"));
         }
         items.truncate(got as usize);
         let mut found = 0;
@@ -723,9 +723,9 @@ pub fn g710_feature(device: &str, report: &[u8]) -> Result<u32, String> {
             }
         }
         if found == 0 {
-            Err(tr!("aucune partie « fabricant » du G710 trouvée (le logiciel de Logitech la garde peut-être pour lui)", "no “vendor” part of the G710 found (Logitech’s software may be keeping it for itself)", "no se encontró la parte «fabricante» del G710 (quizá el programa de Logitech la reserva para sí)"))
+            Err(tr!("aucune partie « fabricant » du G710 trouvée (le logiciel de Logitech la garde peut-être pour lui)", "no “vendor” part of the G710 found (Logitech’s software may be keeping it for itself)", "no se encontró la parte «fabricante» del G710 (quizá el programa de Logitech la reserva para sí)", "не е намерена частта „производител“ на G710 (може би програмата на Logitech я пази за себе си)"))
         } else if accepted == 0 {
-            Err(tr!("le clavier a refusé la commande", "the keyboard refused the command", "el teclado rechazó el comando"))
+            Err(tr!("le clavier a refusé la commande", "the keyboard refused the command", "el teclado rechazó el comando", "клавиатурата отказа командата"))
         } else {
             Ok(accepted)
         }

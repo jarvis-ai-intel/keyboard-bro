@@ -1,5 +1,5 @@
 // =====================================================================
-//  Keyboard Bro — l'interface (version 0.5 : français, anglais, espagnol)
+//  Keyboard Bro — l'interface (version 0.5 : français, anglais, espagnol, bulgare)
 //
 //  En haut : le dessin du clavier (à gauche) et le terminal en direct (à droite).
 //  En bas  : Étape 1 (choisir la touche), Étape 2 (ce que fait la touche),
@@ -1073,15 +1073,17 @@
     const VARS = {
       fr: [['{date}', 'date du jour'], ['{heure}', 'heure'], ['{presse-papiers}', 'ce que tu as copié'], ['{curseur}', 'place du curseur']],
       en: [['{date}', 'today’s date'], ['{time}', 'time'], ['{clipboard}', 'what you copied'], ['{cursor}', 'cursor position']],
-      es: [['{fecha}', 'fecha de hoy'], ['{hora}', 'hora'], ['{portapapeles}', 'lo que copiaste'], ['{cursor}', 'posición del cursor']]
+      es: [['{fecha}', 'fecha de hoy'], ['{hora}', 'hora'], ['{portapapeles}', 'lo que copiaste'], ['{cursor}', 'posición del cursor']],
+      bg: [['{дата}', 'днешната дата'], ['{час}', 'час'], ['{клипборд}', 'това, което копира'], ['{курсор}', 'място на курсора']]
     }[KBI18n.lang];
-    const ALIASES = { date: ['{date}', '{fecha}'], time: ['{heure}', '{time}', '{hora}'], clip: ['{presse-papiers}', '{clipboard}', '{portapapeles}'], cursor: ['{curseur}', '{cursor}'] };
+    const ALIASES = { date: ['{date}', '{fecha}', '{дата}'], time: ['{heure}', '{time}', '{hora}', '{час}'], clip: ['{presse-papiers}', '{clipboard}', '{portapapeles}', '{клипборд}'], cursor: ['{curseur}', '{cursor}', '{курсор}'] };
     body.querySelector('[data-vars]').innerHTML = VARS.map(([t, l]) => '<button type="button" class="chipbtn" data-var="' + t + '"><span class="mono">' + t + '</span>' + esc(l) + '</button>').join('');
     const swap = (text, names, value) => names.reduce((acc, n) => acc.split(n).join(value), text);
     const paintPrev = () => {
       const now = new Date();
       const time = KBI18n.lang === 'fr' ? two(now.getHours()) + ' h ' + two(now.getMinutes())
         : KBI18n.lang === 'es' ? two(now.getHours()) + ':' + two(now.getMinutes())
+          : KBI18n.lang === 'bg' ? two(now.getHours()) + ':' + two(now.getMinutes()) + ' ч.'
           : now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       let out = s.text || '…';
       out = swap(out, ALIASES.date, now.toLocaleDateString(KBI18n.lang === 'en' ? 'en-US' : KBI18n.locale(), { day: 'numeric', month: 'long', year: 'numeric' }));
@@ -1284,8 +1286,8 @@
     const mac = platform && platform.os === 'macos';
     const where = mac ? tr('le Dock') : tr('la barre des tâches');
     const body = frag('<div class="dlg-body" style="padding:0;gap:0">'
-      + '<section class="set-section"><div class="eyebrow">Langue · Language · Idioma</div>'
-      + '<div class="seg lang-seg" role="group" aria-label="Langue · Language · Idioma">' + KBI18n.LANGS.map(([code, name]) => '<button type="button" data-lang="' + code + '" class="' + (code === KBI18n.lang ? 'on' : '') + '" aria-pressed="' + (code === KBI18n.lang) + '">' + name + '</button>').join('') + '</div>'
+      + '<section class="set-section"><div class="eyebrow">Langue · Language · Idioma · Език</div>'
+      + '<div class="seg lang-seg" role="group" aria-label="Langue · Language · Idioma · Език">' + KBI18n.LANGS.map(([code, name]) => '<button type="button" data-lang="' + code + '" class="' + (code === KBI18n.lang ? 'on' : '') + '" aria-pressed="' + (code === KBI18n.lang) + '">' + name + '</button>').join('') + '</div>'
       + '</section>'
       + '<section class="set-section">'
       + '<div class="eyebrow">' + esc(tr('Démarrage')) + '</div>'

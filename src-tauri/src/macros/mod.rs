@@ -61,7 +61,7 @@ fn run_now(name: &str, actions: &[Value]) {
     for (i, a) in actions.iter().enumerate() {
         if let Err(e) = run_action(a) {
             let n = i + 1;
-            notify(false, tr!("Macro « {name} », action {n} : {e}", "Macro “{name}”, action {n}: {e}", "Macro «{name}», acción {n}: {e}"));
+            notify(false, tr!("Macro « {name} », action {n} : {e}", "Macro “{name}”, action {n}: {e}", "Macro «{name}», acción {n}: {e}", "Макрос „{name}“, действие {n}: {e}"));
             return;
         }
     }
@@ -74,7 +74,7 @@ fn run_action(a: &Value) -> Result<(), String> {
 
 #[cfg(not(windows))]
 fn run_action(_a: &Value) -> Result<(), String> {
-    Err(tr!("les macros marchent sous Windows seulement pour l'instant", "macros only work on Windows for now", "por ahora las macros solo funcionan en Windows"))
+    Err(tr!("les macros marchent sous Windows seulement pour l'instant", "macros only work on Windows for now", "por ahora las macros solo funcionan en Windows", "засега макросите работят само под Windows"))
 }
 
 // ---------------------------------------------------------------------
@@ -95,15 +95,19 @@ const MONTHS_EN: [&str; 12] = [
 const MONTHS_ES: [&str; 12] = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
+const MONTHS_BG: [&str; 12] = [
+    "януари", "февруари", "март", "април", "май", "юни", "юли", "август", "септември", "октомври", "ноември", "декември",
+];
 
 /// Les noms de chaque valeur automatique, dans les 3 langues : tous marchent, peu importe la langue choisie.
-const DATE: [&str; 2] = ["{date}", "{fecha}"];
-const TIME: [&str; 3] = ["{heure}", "{time}", "{hora}"];
-const CLIP: [&str; 3] = ["{presse-papiers}", "{clipboard}", "{portapapeles}"];
-const CURSOR: [&str; 2] = ["{curseur}", "{cursor}"];
+const DATE: [&str; 3] = ["{date}", "{fecha}", "{дата}"];
+const TIME: [&str; 4] = ["{heure}", "{time}", "{hora}", "{час}"];
+const CLIP: [&str; 4] = ["{presse-papiers}", "{clipboard}", "{portapapeles}", "{клипборд}"];
+const CURSOR: [&str; 3] = ["{curseur}", "{cursor}", "{курсор}"];
 
 /// Date et heure écrites comme dans la langue choisie :
-/// fr « 12 novembre 2026 », « 08 h 05 » · en « November 12, 2026 », « 8:05 AM » · es « 12 de noviembre de 2026 », « 08:05 ».
+/// fr « 12 novembre 2026 », « 08 h 05 » · en « November 12, 2026 », « 8:05 AM » · es « 12 de noviembre de 2026 », « 08:05 »
+/// · bg « 12 ноември 2026 г. », « 08:05 ч. ».
 fn date_time(lang: u8, y: u16, mo: u16, d: u16, h: u16, mi: u16) -> (String, String) {
     let m = (mo.clamp(1, 12) - 1) as usize;
     match lang {
@@ -117,6 +121,7 @@ fn date_time(lang: u8, y: u16, mo: u16, d: u16, h: u16, mi: u16) -> (String, Str
             (format!("{} {d}, {y}", MONTHS_EN[m]), format!("{h12}:{mi:02} {ampm}"))
         }
         crate::lang::ES => (format!("{d} de {} de {y}", MONTHS_ES[m]), format!("{h:02}:{mi:02}")),
+        crate::lang::BG => (format!("{d} {} {y} г.", MONTHS_BG[m]), format!("{h:02}:{mi:02} ч.")),
         _ => (format!("{d} {} {y}", MONTHS_FR[m]), format!("{h:02} h {mi:02}")),
     }
 }
@@ -282,6 +287,10 @@ mod tests {
         assert_eq!(expand_in(crate::lang::FR, "[{clipboard}|{portapapeles}]", 2026, 1, 1, 0, 0, "x").0, "[x|x]");
         let (t, back) = expand_in(crate::lang::ES, "ab{cursor}cd{curseur}e", 2026, 1, 1, 0, 0, "");
         assert_eq!((t.as_str(), back), ("abcde", 3));
+        // bulgare
+        assert_eq!(expand_in(crate::lang::BG, "{дата}, {час}", 2026, 11, 12, 8, 5, "").0, "12 ноември 2026 г., 08:05 ч.");
+        let (t, back) = expand_in(crate::lang::BG, "[{клипборд}] a{курсор}bc", 2026, 1, 1, 0, 0, "x");
+        assert_eq!((t.as_str(), back), ("[x] abc", 2));
     }
 
     #[test]

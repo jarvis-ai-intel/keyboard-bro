@@ -54,7 +54,7 @@ fn config_path(app: &AppHandle) -> PathBuf {
 fn check_json(text: &str) -> Result<(), String> {
     serde_json::from_str::<serde_json::Value>(text)
         .map(|_| ())
-        .map_err(|e| tr!("le fichier n'est pas du JSON valide ({e})", "the file is not valid JSON ({e})", "el archivo no es un JSON válido ({e})"))
+        .map_err(|e| tr!("le fichier n'est pas du JSON valide ({e})", "the file is not valid JSON ({e})", "el archivo no es un JSON válido ({e})", "файлът не е валиден JSON ({e})"))
 }
 
 fn write_safely(path: &Path, text: &str) -> Result<(), String> {
@@ -140,7 +140,7 @@ pub fn export_config(path: String, json: String) -> Result<(), String> {
 pub fn import_config(path: String) -> Result<String, String> {
     let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
     if size > MAX_SIZE {
-        return Err(tr!("le fichier est trop gros pour être une configuration", "the file is too big to be a configuration", "el archivo es demasiado grande para ser una configuración"));
+        return Err(tr!("le fichier est trop gros pour être une configuration", "the file is too big to be a configuration", "el archivo es demasiado grande para ser una configuración", "файлът е твърде голям, за да е конфигурация"));
     }
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     check_json(&text)?;

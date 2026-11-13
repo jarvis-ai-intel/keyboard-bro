@@ -20,14 +20,14 @@
   <img src="https://img.shields.io/badge/x64%20%2B%20ARM64-yes-2B7A4B" alt="x64 and ARM64">
   <img src="https://img.shields.io/badge/Mac-coming%20soon-8A6D00" alt="Mac coming soon">
   <img src="https://img.shields.io/badge/price-free-2B7A4B" alt="Free">
-  <img src="https://img.shields.io/badge/languages-EN%20%C2%B7%20FR%20%C2%B7%20ES-7A3FB5" alt="English, French, Spanish">
+  <img src="https://img.shields.io/badge/languages-EN%20%C2%B7%20FR%20%C2%B7%20ES%20%C2%B7%20BG-7A3FB5" alt="English, French, Spanish, Bulgarian">
 </p>
 
 <p align="center">
   <img src="branding/capture-fr.png" alt="Keyboard Bro: keyboard drawing, live terminal and steps 1-2-3" width="900">
 </p>
 
-> 🌍 **The interface is available in English, French and Spanish.** Pick the language in ⚙ Settings (by default, it follows your computer). The screenshot above is in French.
+> 🌍 **The interface is available in English, French, Spanish and Bulgarian.** Pick the language in ⚙ Settings (by default, it follows your computer). The screenshot above is in French.
 
 ---
 
@@ -65,7 +65,7 @@ The hard part is that Windows sees all keyboards as one: it doesn't say which ke
 
 ## Features
 
-- 🌍 **In English, French and Spanish**: choose the language in ⚙ Settings (by default, your computer's language).
+- 🌍 **In English, French, Spanish and Bulgarian**: choose the language in ⚙ Settings (by default, your computer's language).
 - 🎹 **One tab per keyboard**, with its name, maker and a **drawing of its keys** (12 layouts: full size, compact, tenkeyless, ISO Canadian French, Apple with F13 to F19, numeric keypad…).
 - 🖥️ **Live terminal**: every key pressed, which keyboard it came from, and which macro ran.
 - 🔒 **Main keyboard locked**: Keyboard Bro never touches its keys (unless you allow it, e.g. for F13 to F19).
@@ -133,7 +133,7 @@ There are other ways to use a second keyboard, but they often mean writing code,
 - ✅ **0.2**: steps 1-2-3, action windows, automatic saving, export and import, locked main keyboard
 - ✅ **0.3**: Logitech G710 / G710+, media keys, mice set aside
 - ✅ **0.4**: macros work (actions + hidden keys), start with Windows, new logo
-- ✅ **0.5**: interface in English, French and Spanish
+- ✅ **0.5**: interface in English, French, Spanish and Bulgarian
 - ⏳ Profiles (one set of keys per program: Photoshop, OBS, Excel…)
 - ⏳ Import an AutoHotkey script (`.ahk`) and convert it to a profile
 - ⏳ Printable labels to stick on the keys

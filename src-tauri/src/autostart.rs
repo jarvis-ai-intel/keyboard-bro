@@ -43,7 +43,7 @@ pub struct State {
 }
 
 fn this_exe() -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| tr!("chemin du programme introuvable ({e})", "program path not found ({e})", "no se encuentra la ruta del programa ({e})"))?;
+    let exe = std::env::current_exe().map_err(|e| tr!("chemin du programme introuvable ({e})", "program path not found ({e})", "no se encuentra la ruta del programa ({e})", "пътят до програмата не е намерен ({e})"))?;
     // Windows : current_exe() est déjà complet (canonicalize donnerait « \\?\C:\… »).
     // Mac / Linux : on suit les liens symboliques pour avoir le vrai chemin.
     if cfg!(windows) {
@@ -66,10 +66,10 @@ fn refuse_reason(exe: &Path) -> Option<String> {
     let s = exe.display().to_string();
     if cfg!(target_os = "macos") {
         if s.contains("/AppTranslocation/") {
-            return Some(tr!("macOS fait tourner Keyboard Bro depuis un dossier temporaire. Glisse d'abord Keyboard Bro dans le dossier Applications, rouvre-le, puis allume l'interrupteur.", "macOS is running Keyboard Bro from a temporary folder. First drag Keyboard Bro into the Applications folder, reopen it, then turn the switch on.", "macOS está ejecutando Keyboard Bro desde una carpeta temporal. Primero arrastra Keyboard Bro a la carpeta Aplicaciones, vuelve a abrirlo y luego activa el interruptor."));
+            return Some(tr!("macOS fait tourner Keyboard Bro depuis un dossier temporaire. Glisse d'abord Keyboard Bro dans le dossier Applications, rouvre-le, puis allume l'interrupteur.", "macOS is running Keyboard Bro from a temporary folder. First drag Keyboard Bro into the Applications folder, reopen it, then turn the switch on.", "macOS está ejecutando Keyboard Bro desde una carpeta temporal. Primero arrastra Keyboard Bro a la carpeta Aplicaciones, vuelve a abrirlo y luego activa el interruptor.", "macOS пуска Keyboard Bro от временна папка. Първо премести Keyboard Bro в папката „Приложения“, отвори го пак и после включи превключвателя."));
         }
         if s.starts_with("/Volumes/") {
-            return Some(tr!("Keyboard Bro est ouvert directement depuis l'image disque. Glisse-le d'abord dans le dossier Applications, rouvre-le, puis allume l'interrupteur.", "Keyboard Bro is open straight from the disk image. First drag it into the Applications folder, reopen it, then turn the switch on.", "Keyboard Bro está abierto directamente desde la imagen de disco. Primero arrástralo a la carpeta Aplicaciones, vuelve a abrirlo y luego activa el interruptor."));
+            return Some(tr!("Keyboard Bro est ouvert directement depuis l'image disque. Glisse-le d'abord dans le dossier Applications, rouvre-le, puis allume l'interrupteur.", "Keyboard Bro is open straight from the disk image. First drag it into the Applications folder, reopen it, then turn the switch on.", "Keyboard Bro está abierto directamente desde la imagen de disco. Primero arrástralo a la carpeta Aplicaciones, vuelve a abrirlo y luego activa el interruptor.", "Keyboard Bro е отворен направо от дисковия образ. Първо го премести в папката „Приложения“, отвори го пак и после включи превключвателя."));
         }
     }
     None
@@ -164,7 +164,7 @@ mod sys {
             return Ok(None);
         }
         if err != ERROR_SUCCESS {
-            return Err(tr!("lecture du registre impossible (erreur {err})", "couldn’t read the registry (error {err})", "no se pudo leer el registro (error {err})"));
+            return Err(tr!("lecture du registre impossible (erreur {err})", "couldn’t read the registry (error {err})", "no se pudo leer el registro (error {err})", "регистърът не може да бъде прочетен (грешка {err})"));
         }
         let mut buf = vec![0u8; size as usize + 2];
         let mut size = buf.len() as u32;
@@ -175,7 +175,7 @@ mod sys {
             return Ok(None);
         }
         if err != ERROR_SUCCESS {
-            return Err(tr!("lecture du registre impossible (erreur {err})", "couldn’t read the registry (error {err})", "no se pudo leer el registro (error {err})"));
+            return Err(tr!("lecture du registre impossible (erreur {err})", "couldn’t read the registry (error {err})", "no se pudo leer el registro (error {err})", "регистърът не може да бъде прочетен (грешка {err})"));
         }
         buf.truncate(size as usize);
         Ok(Some(buf))
@@ -187,7 +187,7 @@ mod sys {
         if err == ERROR_SUCCESS {
             Ok(())
         } else {
-            Err(tr!("écriture dans le registre impossible (erreur {err}) — une règle de l'ordinateur (ex. au travail) bloque peut-être les programmes au démarrage", "couldn’t write to the registry (error {err}) — a computer policy (e.g. at work) may be blocking startup programs", "no se pudo escribir en el registro (error {err}) — quizá una regla de la computadora (p. ej. en el trabajo) bloquea los programas de inicio"))
+            Err(tr!("écriture dans le registre impossible (erreur {err}) — une règle de l'ordinateur (ex. au travail) bloque peut-être les programmes au démarrage", "couldn’t write to the registry (error {err}) — a computer policy (e.g. at work) may be blocking startup programs", "no se pudo escribir en el registro (error {err}) — quizá una regla de la computadora (p. ej. en el trabajo) bloquea los programas de inicio", "не може да се запише в регистъра (грешка {err}) — може би правило на компютъра (напр. в работата) блокира програмите при стартиране"))
         }
     }
 
@@ -197,7 +197,7 @@ mod sys {
         if err == ERROR_SUCCESS || err == ERROR_FILE_NOT_FOUND {
             Ok(())
         } else {
-            Err(tr!("suppression dans le registre impossible (erreur {err})", "couldn’t delete from the registry (error {err})", "no se pudo borrar del registro (error {err})"))
+            Err(tr!("suppression dans le registre impossible (erreur {err})", "couldn’t delete from the registry (error {err})", "no se pudo borrar del registro (error {err})", "не може да се изтрие от регистъра (грешка {err})"))
         }
     }
 
@@ -251,7 +251,7 @@ mod sys {
     use std::path::{Path, PathBuf};
 
     fn home() -> Result<PathBuf, String> {
-        std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| tr!("dossier de l'utilisateur introuvable", "user folder not found", "no se encuentra la carpeta del usuario"))
+        std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| tr!("dossier de l'utilisateur introuvable", "user folder not found", "no se encuentra la carpeta del usuario", "папката на потребителя не е намерена"))
     }
 
     #[cfg(target_os = "macos")]
@@ -332,7 +332,7 @@ mod sys {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => {
                 let f = f.display();
-                Err(tr!("lecture de {f} impossible ({e})", "couldn’t read {f} ({e})", "no se pudo leer {f} ({e})"))
+                Err(tr!("lecture de {f} impossible ({e})", "couldn’t read {f} ({e})", "no se pudo leer {f} ({e})", "{f} не може да бъде прочетен ({e})"))
             }
         }
     }
@@ -342,13 +342,13 @@ mod sys {
         if let Some(dir) = f.parent() {
             fs::create_dir_all(dir).map_err(|e| {
                 let d = dir.display();
-                tr!("création de {d} impossible ({e})", "couldn’t create {d} ({e})", "no se pudo crear {d} ({e})")
+                tr!("création de {d} impossible ({e})", "couldn’t create {d} ({e})", "no se pudo crear {d} ({e})", "{d} не може да бъде създаден ({e})")
             })?;
         }
         let tmp = f.with_extension("tmp");
         let failed = |e: std::io::Error| {
             let f = f.display();
-            tr!("écriture de {f} impossible ({e})", "couldn’t write {f} ({e})", "no se pudo escribir {f} ({e})")
+            tr!("écriture de {f} impossible ({e})", "couldn’t write {f} ({e})", "no se pudo escribir {f} ({e})", "{f} не може да бъде записан ({e})")
         };
         fs::write(&tmp, content(exe)).map_err(failed)?;
         fs::rename(&tmp, &f).map_err(failed)
@@ -361,7 +361,7 @@ mod sys {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => {
                 let f = f.display();
-                Err(tr!("suppression de {f} impossible ({e})", "couldn’t delete {f} ({e})", "no se pudo borrar {f} ({e})"))
+                Err(tr!("suppression de {f} impossible ({e})", "couldn’t delete {f} ({e})", "no se pudo borrar {f} ({e})", "{f} не може да бъде изтрит ({e})"))
             }
         }
     }
