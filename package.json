@@ -1,5 +1,6 @@
 {
   "name": "keyboard-bro",
+  "license": "MIT",
   "private": true,
   "version": "0.5.2",
   "description": "Keyboard Bro — un 2e clavier pour tes macros",

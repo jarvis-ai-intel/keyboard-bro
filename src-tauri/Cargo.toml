@@ -3,6 +3,7 @@ name = "keyboard-bro"
 version = "0.5.2"
 description = "Keyboard Bro — un 2e clavier pour tes macros"
 authors = ["Jarvis"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.77"
 
